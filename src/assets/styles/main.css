@@ -8,6 +8,7 @@
   --cmd-text: #111827;
   --cmd-muted: #6b7280;
   --cmd-primary: #2563eb;
+  --cmd-border-card: #2564ebb9;
   --cmd-primary-soft: #eff6ff;
   --cmd-sidebar-width: 18rem;
   --cmd-topbar-height: 4.5rem;
@@ -71,9 +72,17 @@ select {
   font-size: 0.95rem;
 }
 
-.cmd-card {
+.cmd-dashboard-card {
   border: 1px solid var(--cmd-border);
   border-radius: 1.25rem;
+  background: var(--cmd-card);
+  box-shadow: 0 10px 15px rgba(15, 23, 42, 0.05);
+  border-bottom: 4px solid var(--cmd-border-card);
+}
+
+.cmd-card {
+  border: 1px solid var(--cmd-border);
+  border-radius: 1rem;
   background: var(--cmd-card);
   box-shadow: 0 10px 15px rgba(15, 23, 42, 0.05);
 }

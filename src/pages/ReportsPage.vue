@@ -109,7 +109,6 @@ async function exportReports() {
         toolbar
         pagination
         :rows="10"
-        min-height="320px"
         scrollable
       >
         <template #toolbarStart>
