@@ -94,59 +94,54 @@ async function exportReports() {
     <div class="cmd-page-header">
       <div>
         <h1 class="cmd-page-title">Reports</h1>
-        <p class="cmd-page-description">
-          Single CMD report template page. More reports can be added after the API is confirmed.
-        </p>
       </div>
     </div>
 
     <div class="cmd-card">
-      <div class="cmd-card-body">
-        <BaseDataTable
-          :value="filteredReports"
-          :columns="columns"
-          data-key="id"
-          checkbox
-          striped-rows
-          grid-lines
-          toolbar
-          pagination
-          :rows="10"
-          min-height="320px"
-          max-height="560px"
-          scrollable
-        >
-          <template #toolbarStart>
-            <BaseInput
-              v-model="filters.keyword"
-              icon="pi pi-search"
-              placeholder="Search report"
-              class="w-full sm:w-64"
-            />
-          </template>
-          <template #toolbarEnd>
-            <BaseButton
-              label="Export"
-              icon="pi pi-download"
-              severity="secondary"
-              outlined
-              :loading="exporting"
-              @click="exportReports"
-            />
-          </template>
-          <template #body-issueCount="{ value }">
-            <span
-              class="font-semibold"
-              :class="Number(value) > 0 ? 'text-orange-600' : 'text-green-600'"
-            >
-              {{ value }}
-            </span>
-          </template>
-          <template #body-status="{ value }">
-            <Tag :value="value" :severity="statusSeverity(String(value))" />
-          </template>
-        </BaseDataTable>
-      </div>
+      <BaseDataTable
+        :value="filteredReports"
+        :columns="columns"
+        data-key="id"
+        size="small"
+        checkbox
+        striped-rows
+        grid-lines
+        toolbar
+        pagination
+        :rows="10"
+        min-height="320px"
+        scrollable
+      >
+        <template #toolbarStart>
+          <BaseInput
+            v-model="filters.keyword"
+            icon="pi pi-search"
+            placeholder="Search report"
+            class="w-full sm:w-64"
+          />
+        </template>
+        <template #toolbarEnd>
+          <BaseButton
+            label="Export"
+            icon="pi pi-download"
+            severity="secondary"
+            outlined
+            :loading="exporting"
+            @click="exportReports"
+          />
+        </template>
+        <template #body-issueCount="{ value }">
+          <span
+            class="font-semibold"
+            :class="Number(value) > 0 ? 'text-orange-600' : 'text-green-600'"
+          >
+            {{ value }}
+          </span>
+        </template>
+        <template #body-status="{ value }">
+          <Tag :value="value" :severity="statusSeverity(String(value))" />
+        </template>
+      </BaseDataTable>
     </div>
   </section>
 </template>

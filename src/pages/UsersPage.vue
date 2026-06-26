@@ -24,20 +24,35 @@ const columns: BaseTableColumn<MockUserRow>[] = [
     </div>
 
     <div class="cmd-card">
-      <div class="cmd-card-body">
-        <BaseDataTable :value="mockUsers" :columns="columns" data-key="id" checkbox striped-rows toolbar pagination :rows="10">
-          <template #toolbarStart>
-            <BaseButton label="New" icon="pi pi-plus" />
-            <BaseButton label="Delete" icon="pi pi-trash" severity="danger" outlined />
-          </template>
-          <template #toolbarEnd>
-            <BaseButton label="Export" icon="pi pi-download" severity="secondary" outlined />
-          </template>
-          <template #body-status="{ value }">
-            <Tag :value="value" :severity="value === 'Active' ? 'success' : 'secondary'" />
-          </template>
-        </BaseDataTable>
-      </div>
+      <BaseDataTable
+        :value="mockUsers"
+        :columns="columns"
+        data-key="id"
+        size="small"
+        grid-lines
+        checkbox
+        striped-rows
+        toolbar
+        pagination
+        :rows="10"
+      >
+        <template #toolbarStart>
+          <BaseButton label="New" size="small" icon="pi pi-plus" />
+          <BaseButton label="Delete" size="small" icon="pi pi-trash" severity="danger" outlined />
+        </template>
+        <template #toolbarEnd>
+          <BaseButton
+            label="Export"
+            size="small"
+            icon="pi pi-download"
+            severity="secondary"
+            outlined
+          />
+        </template>
+        <template #body-status="{ value }">
+          <Tag :value="value" :severity="value === 'Active' ? 'success' : 'secondary'" />
+        </template>
+      </BaseDataTable>
     </div>
   </section>
 </template>

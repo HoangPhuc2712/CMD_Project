@@ -31,7 +31,9 @@ function statusSeverity(status: string) {
     <div class="cmd-page-header">
       <div>
         <h1 class="cmd-page-title">Dashboard</h1>
-        <p class="cmd-page-description">Overview cards and recent activity for the CMD report template.</p>
+        <p class="cmd-page-description">
+          Overview cards and recent activity for the CMD report template.
+        </p>
       </div>
     </div>
 
@@ -48,22 +50,6 @@ function statusSeverity(status: string) {
         </div>
         <p class="m-0 mt-4 text-sm text-slate-500">{{ stat.caption }}</p>
       </article>
-    </div>
-
-    <div class="cmd-card">
-      <div class="cmd-card-header">
-        <div>
-          <h2 class="cmd-section-title">Recent Activity</h2>
-          <p class="cmd-section-caption">Mock data, ready to replace with CMD API results.</p>
-        </div>
-      </div>
-      <div class="cmd-card-body">
-        <BaseDataTable :value="recentActivities" :columns="activityColumns" data-key="id" striped-rows>
-          <template #body-status="{ value }">
-            <Tag :value="value" :severity="statusSeverity(String(value))" />
-          </template>
-        </BaseDataTable>
-      </div>
     </div>
   </section>
 </template>

@@ -19,22 +19,40 @@ const columns: BaseTableColumn<MockRouteRow>[] = [
     <div class="cmd-page-header">
       <div>
         <h1 class="cmd-page-title">Routes</h1>
-        <p class="cmd-page-description">Route template, ready for CMD-specific checkpoints later.</p>
+        <p class="cmd-page-description">
+          Route template, ready for CMD-specific checkpoints later.
+        </p>
       </div>
     </div>
 
     <div class="cmd-card">
-      <div class="cmd-card-body">
-        <BaseDataTable :value="mockRoutes" :columns="columns" data-key="id" striped-rows toolbar pagination :rows="10">
-          <template #toolbarStart>
-            <BaseButton label="New" icon="pi pi-plus" />
-            <BaseButton label="Create Shift" icon="pi pi-calendar-plus" severity="secondary" outlined />
-          </template>
-          <template #body-status="{ value }">
-            <Tag :value="value" :severity="value === 'Active' ? 'success' : 'warn'" />
-          </template>
-        </BaseDataTable>
-      </div>
+      <BaseDataTable
+        :value="mockRoutes"
+        :columns="columns"
+        data-key="id"
+        size="small"
+        checkbox
+        grid-lines
+        striped-rows
+        toolbar
+        pagination
+        :rows="10"
+      >
+        <template #toolbarStart>
+          <BaseButton label="New" size="small" icon="pi pi-plus" />
+          <BaseButton label="Delete" size="small" icon="pi pi-trash" severity="danger" outlined />
+          <BaseButton
+            label="Create Shift"
+            size="small"
+            icon="pi pi-calendar-plus"
+            severity="info"
+            outlined
+          />
+        </template>
+        <template #body-status="{ value }">
+          <Tag :value="value" :severity="value === 'Active' ? 'success' : 'warn'" />
+        </template>
+      </BaseDataTable>
     </div>
   </section>
 </template>

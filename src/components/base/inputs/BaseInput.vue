@@ -9,6 +9,7 @@ defineOptions({ inheritAttrs: false })
 const props = withDefaults(
   defineProps<{
     modelValue?: string | null
+    icon?: string
     label?: string
     severity?: PrimeSeverity
     placeholder?: string
@@ -41,6 +42,8 @@ const hasError = computed(() => props.invalid || Boolean(props.errorMessage))
     </label>
     <InputText
       :id="inputId"
+      :icon="icon"
+      :label="label"
       :model-value="modelValue || ''"
       :placeholder="placeholder"
       :size="size"

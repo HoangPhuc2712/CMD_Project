@@ -23,19 +23,35 @@ const columns: BaseTableColumn<MockRoleRow>[] = [
     </div>
 
     <div class="cmd-card">
-      <div class="cmd-card-body">
-        <BaseDataTable :value="mockRoles" :columns="columns" data-key="id" striped-rows toolbar pagination :rows="10">
-          <template #toolbarStart>
-            <BaseButton label="New" icon="pi pi-plus" />
-          </template>
-          <template #toolbarEnd>
-            <BaseButton label="Export" icon="pi pi-download" severity="secondary" outlined />
-          </template>
-          <template #body-status="{ value }">
-            <Tag :value="value" severity="success" />
-          </template>
-        </BaseDataTable>
-      </div>
+      <BaseDataTable
+        :value="mockRoles"
+        :columns="columns"
+        data-key="id"
+        size="small"
+        grid-lines
+        checkbox
+        striped-rows
+        toolbar
+        pagination
+        :rows="10"
+      >
+        <template #toolbarStart>
+          <BaseButton label="New" size="small" icon="pi pi-plus" />
+          <BaseButton label="Delete" size="small" icon="pi pi-trash" severity="danger" outlined />
+        </template>
+        <template #toolbarEnd>
+          <BaseButton
+            label="Export"
+            size="small"
+            icon="pi pi-download"
+            severity="secondary"
+            outlined
+          />
+        </template>
+        <template #body-status="{ value }">
+          <Tag :value="value" severity="success" />
+        </template>
+      </BaseDataTable>
     </div>
   </section>
 </template>
