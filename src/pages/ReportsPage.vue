@@ -116,6 +116,7 @@ async function exportReports() {
           <BaseInput
             v-model="filters.keyword"
             icon="pi pi-search"
+            size="small"
             placeholder="Search report"
             class="w-full sm:w-64"
           />
@@ -124,6 +125,7 @@ async function exportReports() {
           <BaseButton
             label="Export"
             icon="pi pi-download"
+            size="small"
             severity="secondary"
             outlined
             :loading="exporting"
