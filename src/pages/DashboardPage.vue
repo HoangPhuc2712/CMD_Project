@@ -38,7 +38,11 @@ function statusSeverity(status: string) {
     </div>
 
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <article v-for="stat in dashboardStats" :key="stat.label" class="cmd-dashboard-card p-5">
+      <article
+        v-for="stat in dashboardStats"
+        :key="stat.label"
+        class="cmd-dashboard-card p-5 hover:translate-y-[-2px] duration-300"
+      >
         <div class="flex items-start justify-between gap-3">
           <div>
             <p class="m-0 text-sm font-semibold text-slate-500">{{ stat.label }}</p>

@@ -43,20 +43,15 @@ const menuGroups = [
             :key="item.to"
             :to="item.to"
             class="cmd-sidebar__menu-link"
-            :class="{ 'router-link-active': route.path.startsWith(item.to) && item.to !== '/dashboard' }"
+            :class="{
+              'router-link-active': route.path.startsWith(item.to) && item.to !== '/dashboard',
+            }"
           >
             <i :class="item.icon" />
             <span>{{ item.label }}</span>
           </RouterLink>
         </template>
       </nav>
-
-      <div class="cmd-sidebar__footer">
-        <div class="rounded-2xl bg-blue-50 p-4 text-sm text-blue-900">
-          <div class="mb-1 font-bold">Mock Login</div>
-          <div class="text-blue-700">Backend token flow will be connected later.</div>
-        </div>
-      </div>
     </div>
   </aside>
 </template>
