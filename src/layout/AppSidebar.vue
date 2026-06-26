@@ -12,7 +12,7 @@ const menuGroups = [
     label: 'Management',
     items: [
       { label: 'Users', icon: 'pi pi-users', to: '/users' },
-      { label: 'Roles', icon: 'pi pi-shield', to: '/roles' },
+      { label: 'Roles', icon: 'pi pi-key', to: '/roles' },
       { label: 'Areas', icon: 'pi pi-map-marker', to: '/areas' },
       { label: 'Routes', icon: 'pi pi-sitemap', to: '/routes' },
     ],
