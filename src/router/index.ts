@@ -1,48 +1,72 @@
-import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
+import { routes } from './routes'
 import { useAuthStore } from '@/stores/auth.store'
 
-const routes: RouteRecordRaw[] = [
-  {
-    path: '/login',
-    name: 'login',
-    component: () => import('@/pages/LoginPage.vue'),
-    meta: { public: true },
-  },
-  {
-    path: '/',
-    component: () => import('@/layout/AppLayout.vue'),
-    meta: { requiresAuth: true },
-    children: [
-      { path: '', redirect: '/dashboard' },
-      { path: 'dashboard', name: 'dashboard', component: () => import('@/pages/DashboardPage.vue') },
-      { path: 'users', name: 'users', component: () => import('@/pages/UsersPage.vue') },
-      { path: 'roles', name: 'roles', component: () => import('@/pages/RolesPage.vue') },
-      { path: 'areas', name: 'areas', component: () => import('@/pages/AreasPage.vue') },
-      { path: 'routes', name: 'routes', component: () => import('@/pages/RoutesPage.vue') },
-      { path: 'reports', name: 'reports', component: () => import('@/pages/ReportsPage.vue') },
-    ],
-  },
-  {
-    path: '/:pathMatch(.*)*',
-    redirect: '/dashboard',
-  },
-]
-
-const router = createRouter({
-  history: createWebHashHistory(import.meta.env.BASE_URL),
+export const router = createRouter({
+  history: createWebHashHistory(),
   routes,
 })
 
-router.beforeEach((to) => {
+async function clearPageFiltersByRouteName(routeName: string | symbol | null | undefined) {
+  switch (routeName) {
+    case 'areas': {
+      const { useAreasStore } = await import('@/modules/areas/areas.store')
+      useAreasStore().clearFilters()
+      break
+    }
+    case 'reports': {
+      const { useReportsStore } = await import('@/modules/reports/reports.store')
+      useReportsStore().clearFilters()
+      break
+    }
+    case 'patrol-detail-reports': {
+      const { usePatrolDetailReportsStore } = await import('@/modules/reports/patrolDetailReports.store')
+      usePatrolDetailReportsStore().clearFilters()
+      break
+    }
+    case 'roles': {
+      const { useRolesStore } = await import('@/modules/roles/roles.store')
+      useRolesStore().clearFilters()
+      break
+    }
+    case 'routes': {
+      const { useRoutesStore } = await import('@/modules/routes/routes.store')
+      useRoutesStore().clearFilters()
+      break
+    }
+    case 'users': {
+      const { useUsersStore } = await import('@/modules/users/users.store')
+      useUsersStore().clearFilters()
+      break
+    }
+    default:
+      break
+  }
+}
+
+router.beforeEach(async (to) => {
+  await clearPageFiltersByRouteName(to.name)
+
   const auth = useAuthStore()
+  if (!auth.token) auth.restoreSession()
 
-  if (to.meta.requiresAuth && !auth.isAuthenticated) {
-    return { name: 'login' }
+  if (to.meta.requiresAuth) {
+    if (!auth.isAuthenticated) return { name: 'login' }
+
+    if (auth.isTokenExpired()) {
+      await auth.expireSession()
+      return { name: 'login' }
+    }
+
+    if (!auth.sessionSyncedOnce) {
+      const ok = await auth.syncSessionWithServer()
+      if (!ok || !auth.isAuthenticated) return { name: 'login' }
+    }
   }
 
-  if (to.name === 'login' && auth.isAuthenticated) {
-    return { name: 'dashboard' }
-  }
+  if (to.meta.adminOnly && !auth.isAdminUser) return { name: 'forbidden' }
+
+  if (to.name === 'login' && auth.isAuthenticated) return { name: 'dashboard' }
+
+  return true
 })
-
-export default router
