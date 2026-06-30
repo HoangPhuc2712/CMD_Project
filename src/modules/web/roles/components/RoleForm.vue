@@ -1,195 +1,99 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import Dialog from 'primevue/dialog'
 import Checkbox from 'primevue/checkbox'
 import MultiSelect from 'primevue/multiselect'
-
 import BaseButton from '@/components/common/buttons/BaseButton.vue'
 import BaseInput from '@/components/common/inputs/BaseInput.vue'
-import BaseMessage from '@/components/common/messages/BaseMessage.vue'
-
 import { createRole, updateRole } from '@/modules/web/roles/roles.api'
-import { translateMenuCategoryName, translateRoleName } from '@/utils/dataI18n'
 
 export type RoleFormMode = 'new' | 'view' | 'edit'
 
 export type RoleFormModel = {
   role_id?: number
-  role_code: string
+  role_code?: string
   role_name: string
-  role_hour_report: boolean
   role_is_admin: boolean
-  mc_ids: number[]
+  role_hour_report: boolean
+  menu_ids: number[]
   menu_names?: string[]
 }
 
-export type RoleFormSubmitPayload = {
-  submit: (actor_id: string) => Promise<void>
-}
+export type RoleFormSubmitPayload = { submit: (actor_id: string) => Promise<void> }
 
-const { t } = useI18n()
 const props = defineProps<{
   visible: boolean
   mode: RoleFormMode
   model: RoleFormModel | null
-  menuOptions: { label: string; value: number }[]
+  menuOptions?: { label: string; value: number }[]
   loading?: boolean
-  menuOptionsLoading?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:visible', v: boolean): void
   (e: 'submit', payload: RoleFormSubmitPayload): void
   (e: 'close'): void
-  (e: 'permission-dropdown-show'): void
 }>()
 
+const submitted = ref(false)
 const isView = computed(() => props.mode === 'view')
+const isSubmitting = computed(() => Boolean(props.loading))
 const title = computed(() =>
-  props.mode === 'new'
-    ? t('roleForm.newRole')
-    : props.mode === 'edit'
-      ? t('roleForm.roleEdit')
-      : t('roleForm.roleDetail'),
+  props.mode === 'new' ? 'Create Role' : props.mode === 'edit' ? 'Edit Role' : 'Role Detail',
 )
 
-const isSubmitting = computed(() => submitLocked.value || Boolean(props.loading))
-
-const submitted = ref(false)
-const submitLocked = ref(false)
-
-const form = reactive<RoleFormModel>({
-  role_id: undefined,
+const form = reactive({
+  role_id: undefined as number | undefined,
   role_code: '',
   role_name: '',
-  role_hour_report: false,
   role_is_admin: false,
-  mc_ids: [],
-  menu_names: [],
+  role_hour_report: false,
+  menu_ids: [] as number[],
 })
-
-const roleNameError = computed(() => submitted.value && !String(form.role_name ?? '').trim())
-const permissionsError = computed(
-  () => submitted.value && (!Array.isArray(form.mc_ids) || form.mc_ids.length === 0),
-)
-
-watch(
-  () => props.loading,
-  (loading) => {
-    if (!loading) {
-      submitLocked.value = false
-    }
-  },
-)
-
-watch(
-  () => props.visible,
-  (visible) => {
-    if (!visible) {
-      submitLocked.value = false
-    }
-  },
-)
+const nameError = computed(() => submitted.value && !form.role_name.trim())
+const menuError = computed(() => submitted.value && !form.menu_ids.length)
 
 watch(
   () => props.model,
-  (m) => {
-    if (!m) return
-
+  (model) => {
     submitted.value = false
-    form.role_id = m.role_id
-    form.role_code = m.role_code ?? ''
-    form.role_name = m.role_name ?? ''
-    form.role_hour_report = Boolean(m.role_hour_report)
-    form.role_is_admin = Boolean(m.role_is_admin)
-    form.mc_ids = Array.isArray(m.mc_ids) ? [...m.mc_ids] : []
-    form.menu_names = Array.isArray(m.menu_names) ? [...m.menu_names] : []
+    form.role_id = model?.role_id
+    form.role_code = model?.role_code ?? ''
+    form.role_name = model?.role_name ?? ''
+    form.role_is_admin = Boolean(model?.role_is_admin)
+    form.role_hour_report = Boolean(model?.role_hour_report)
+    form.menu_ids = Array.isArray(model?.menu_ids) ? [...model!.menu_ids] : []
   },
   { immediate: true },
 )
 
-const resolvedMenuOptions = computed(() => {
-  const baseOptions = Array.isArray(props.menuOptions) ? [...props.menuOptions] : []
-  const optionMap = new Map<number, { label: string; value: number }>()
-
-  for (const option of baseOptions) {
-    const value = Number(option?.value)
-    if (!Number.isFinite(value)) continue
-    optionMap.set(value, option)
-  }
-
-  ;(form.mc_ids ?? []).forEach((id, index) => {
-    const numericId = Number(id)
-    if (!Number.isFinite(numericId) || optionMap.has(numericId)) return
-
-    const rawName = Array.isArray(form.menu_names) ? form.menu_names[index] : ''
-    const label = rawName ? translateMenuCategoryName(String(rawName), t) : String(numericId)
-
-    optionMap.set(numericId, { value: numericId, label })
-  })
-
-  return Array.from(optionMap.values())
-})
-
-const permissionLabels = computed(() => {
-  if (isView.value) {
-    return (form.menu_names ?? [])
-      .filter(Boolean)
-      .map((name) => translateMenuCategoryName(String(name), t))
-  }
-
-  const ids = new Set<number>((form.mc_ids ?? []).map((x) => Number(x)))
-  return resolvedMenuOptions.value.filter((x) => ids.has(Number(x.value))).map((x) => x.label)
-})
-
-const translatedRoleName = computed(() => translateRoleName(String(form.role_name ?? ''), t))
-
-function handleDialogVisibleChange(nextVisible: boolean) {
-  if (isSubmitting.value) return
-  emit('update:visible', nextVisible)
-}
-
 function close() {
+  if (isSubmitting.value) return
   submitted.value = false
-  submitLocked.value = false
   emit('update:visible', false)
   emit('close')
 }
 
 function submit() {
-  if (isSubmitting.value) return
-
   submitted.value = true
-
-  const name = String(form.role_name ?? '').trim()
-  const mcIds = Array.isArray(form.mc_ids) ? form.mc_ids : []
-
-  if (!name || !mcIds.length) return
-
-  submitLocked.value = true
-
+  const name = form.role_name.trim()
+  if (!name || !form.menu_ids.length) return
   emit('submit', {
     submit: async (actor_id: string) => {
-      if (props.mode === 'new') {
-        await createRole({
-          role_name: name,
-          role_hour_report: Boolean(form.role_hour_report),
-          role_is_admin: Boolean(form.role_is_admin),
-          mc_ids: mcIds,
-          actor_id,
-        })
-      } else {
-        if (!form.role_id) throw new Error('ROLE_NOT_FOUND')
-        await updateRole({
-          role_id: form.role_id,
-          role_name: name,
-          role_hour_report: Boolean(form.role_hour_report),
-          role_is_admin: Boolean(form.role_is_admin),
-          mc_ids: mcIds,
-          actor_id,
-        })
+      const payload = {
+        role_code: form.role_code,
+        role_name: name,
+        role_is_admin: form.role_is_admin,
+        role_hour_report: form.role_hour_report,
+        menu_ids: form.menu_ids,
+        actor_id,
       }
+      if (props.mode === 'new') {
+        await createRole(payload)
+        return
+      }
+      if (!form.role_id) throw new Error('ROLE_NOT_FOUND')
+      await updateRole({ ...payload, role_id: form.role_id })
     },
   })
 }
@@ -200,108 +104,68 @@ function submit() {
     :visible="visible"
     modal
     :header="title"
-    :style="{ width: '860px', maxWidth: '95vw' }"
-    :contentStyle="{ maxHeight: '70vh', overflow: 'auto' }"
+    :style="{ width: '820px', maxWidth: '95vw' }"
     :closable="!isSubmitting"
     :closeOnEscape="!isSubmitting"
-    @update:visible="handleDialogVisibleChange"
+    @update:visible="emit('update:visible', $event)"
     @hide="close"
   >
-    <div v-if="!model" class="text-slate-500">{{ t('common.noData') }}.</div>
-
+    <div v-if="!model" class="text-slate-500">No role data.</div>
     <div v-else class="space-y-4">
-      <div v-if="isView" class="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div>
-          <label class="block text-sm text-slate-600 mb-1">{{ t('roleForm.roleCode') }}</label>
-          <div class="text-slate-800 font-semibold">{{ form.role_code || '—' }}</div>
-        </div>
-
-        <div>
-          <label class="block text-sm text-slate-600 mb-1">{{ t('roleForm.roleName') }}</label>
-          <div class="text-slate-800 font-semibold">{{ translatedRoleName }}</div>
-        </div>
-
-        <div>
-          <label class="block text-sm text-slate-600 mb-1">{{
-            t('roleForm.administrationPermission')
-          }}</label>
-          <div class="text-slate-800 font-semibold">
-            {{
-              form.role_is_admin ? t('roleForm.isPermission.yes') : t('roleForm.isPermission.no')
-            }}
-          </div>
-        </div>
-
-        <div class="md:col-span-3">
-          <label class="block text-sm text-slate-600 mb-1">{{ t('roleForm.permission') }}</label>
-          <div class="text-slate-800 font-semibold">
-            <span v-if="permissionLabels.length">{{ permissionLabels.join(', ') }}</span>
-            <span v-else class="text-slate-500 font-normal">—</span>
-          </div>
-        </div>
+      <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        Draft UI only. Permission rules will be adjusted after CMD authorization is confirmed.
       </div>
-
-      <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label class="block text-sm text-slate-600 mb-1">{{ t('roleForm.roleName') }}</label>
+          <label class="mb-1 block text-sm text-slate-600">Role Name</label>
+          <div v-if="isView" class="font-semibold text-slate-800">{{ form.role_name }}</div>
           <BaseInput
+            v-else
             v-model="form.role_name"
             label=""
             size="small"
-            :placeholder="t('roleForm.enterName')"
-            :hasError="roleNameError"
-            :message="t('roleForm.error.roleNameRequired')"
+            placeholder="Enter role name"
+            :hasError="nameError"
+            message="Role name is required."
           />
         </div>
-
-        <div>
-          <label class="block text-sm text-slate-600 mb-1">{{
-            t('roleList.accessPermission')
-          }}</label>
+        <div class="flex items-end gap-2 mb-2">
+          <Checkbox
+            v-model="form.role_is_admin"
+            inputId="role_is_admin"
+            binary
+            :disabled="isView"
+          />
+          <label for="role_is_admin" class="text-sm text-slate-700"
+            >Administrator Permissions</label
+          >
+        </div>
+        <div class="md:col-span-2">
+          <label class="mb-1 block text-sm text-slate-600">Access Menu</label>
+          <div v-if="isView" class="font-semibold text-slate-800">
+            {{ model.menu_names?.join(', ') || '-' }}
+          </div>
           <MultiSelect
-            v-model="form.mc_ids"
-            class="app-multiselect-compact app-multiselect-compact-chips w-full min-w-0"
-            :class="{ 'p-invalid': permissionsError }"
-            :options="resolvedMenuOptions"
+            v-else
+            v-model="form.menu_ids"
+            :options="menuOptions"
             optionLabel="label"
-            size="small"
             optionValue="value"
-            :placeholder="t('roleForm.selectPermission')"
-            display="chip"
-            :loading="Boolean(menuOptionsLoading)"
-            @show="emit('permission-dropdown-show')"
-            :maxSelectedLabels="2"
-          />
-          <BaseMessage
-            style="margin: 8px 0px"
-            :hasError="permissionsError"
-            severity="error"
             size="small"
-            variant="simple"
-            :message="t('roleForm.error.permissionRequired')"
+            display="chip"
+            placeholder="Select menus"
+            class="w-full"
+            :invalid="menuError"
           />
-        </div>
-
-        <div class="sm:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center min-h-[42px]">
-          <div class="flex items-center gap-2 bg-transparent">
-            <Checkbox v-model="form.role_hour_report" inputId="role-hour-report" binary />
-            <label for="role-hour-report" class="text-sm text-slate-700">
-              {{ t('roleForm.hourReportPermission') }}
-            </label>
-          </div>
-
-          <div class="flex items-center gap-2 bg-transparent">
-            <Checkbox v-model="form.role_is_admin" inputId="role-is-admin" binary />
-            <label for="role-is-admin" class="text-sm text-slate-700">
-              {{ t('roleForm.administrationPermission') }}
-            </label>
-          </div>
+          <small v-if="menuError" class="mt-1 block text-red-500"
+            >At least one menu is required.</small
+          >
         </div>
       </div>
-
-      <div class="flex justify-end gap-2 pt-3 border-t border-slate-200">
+      <div class="flex justify-end gap-2 border-t border-slate-200 pt-3">
         <BaseButton
-          :label="t('common.cancel')"
+          label="Cancel"
+          size="small"
           severity="danger"
           outlined
           :disabled="isSubmitting"
@@ -309,7 +173,8 @@ function submit() {
         />
         <BaseButton
           v-if="!isView"
-          :label="t('common.submit')"
+          label="Submit"
+          size="small"
           severity="success"
           :loading="isSubmitting"
           :disabled="isSubmitting"

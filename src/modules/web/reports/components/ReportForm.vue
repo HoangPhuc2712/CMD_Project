@@ -1,512 +1,82 @@
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import Tag from 'primevue/tag'
-import Select from 'primevue/select'
-import { useI18n } from 'vue-i18n'
-import { translateRouteName } from '@/utils/dataI18n'
-
 import BaseButton from '@/components/common/buttons/BaseButton.vue'
-import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
-import BaseImageViewer from '@/components/common/BaseImageViewer.vue'
 
-import type { ReportImage, ReportRow } from '@/modules/web/reports/reports.types'
+export type ReportFormMode = 'view' | 'edit'
 
-type BaseImageItem = {
-  id: string | number
-  src: string
-  alt?: string
-  title?: string
+export type ReportFormModel = {
+  id?: number | string
+  routeName?: string
+  checkpointName?: string
+  inspectionResult?: string
+  note?: string
+  reportAt?: string
+  processingStatus?: string
+  reportBy?: string
 }
 
-export type ReportFormMode = 'view' | 'edit-status'
-export type ReportFormModel = ReportRow
-
-const props = withDefaults(
-  defineProps<{
-    visible: boolean
-    model: ReportFormModel | null
-    mode?: ReportFormMode
-    canEditStatus?: boolean
-  }>(),
-  {
-    canEditStatus: true,
-  },
-)
+const props = defineProps<{
+  visible: boolean
+  mode?: ReportFormMode
+  model: ReportFormModel | null
+  loading?: boolean
+}>()
 
 const emit = defineEmits<{
   (e: 'update:visible', v: boolean): void
-  (e: 'submit-status', payload: { pr_id: number; pr_status: number }): void
   (e: 'close'): void
 }>()
 
-const viewerVisible = ref(false)
-const viewerTitle = ref('Detail Images')
-const viewerItems = ref<BaseImageItem[]>([])
-const viewerStartIndex = ref(0)
-const statusDraft = ref(0)
-const inlineStatusEdit = ref(false)
-const statusValidationMessage = ref('')
-const statusValidationTimer = ref<number | null>(null)
-const { t } = useI18n()
-
-function translatedRouteName(value: string | null | undefined) {
-  return translateRouteName(String(value ?? ''), t)
-}
-
-const formMode = computed<ReportFormMode>(() => props.mode ?? 'view')
-const canEditStatus = computed(() => Boolean(props.canEditStatus))
-const canEditCurrentStatus = computed(
-  () =>
-    canEditStatus.value &&
-    Boolean(props.model?.pr_has_problem) &&
-    Number(props.model?.pr_status ?? 0) !== 2,
-)
-const isExternalEditStatus = computed(
-  () => canEditCurrentStatus.value && formMode.value === 'edit-status',
-)
-const isEditStatus = computed(
-  () => canEditCurrentStatus.value && (isExternalEditStatus.value || inlineStatusEdit.value),
-)
-const inspectionOk = computed(() => (props.model ? props.model.pr_has_problem === false : true))
-const shiftText = computed(() => String(props.model?.shift_text ?? '').trim())
-
-const issueStatusOptions = computed(() => [
-  { label: t('reportForm.issueStatusOptions.pending'), value: 0 },
-  { label: t('reportForm.issueStatusOptions.inProgress'), value: 1 },
-  { label: t('reportForm.issueStatusOptions.completed'), value: 2 },
-  // { label: t('reportForm.issueStatusOptions.incompleted'), value: 3 },
-])
+const title = computed(() => (props.mode === 'edit' ? 'Edit Report' : 'Report Detail'))
+const resultSeverity = computed(() => (props.model?.inspectionResult === 'OK' ? 'success' : 'danger'))
 
 function close() {
+  if (props.loading) return
   emit('update:visible', false)
   emit('close')
 }
-
-function formatDateTime(iso: string) {
-  const s = (iso ?? '').trim()
-  if (!s) return '—'
-  const d = new Date(s)
-  if (!Number.isFinite(d.getTime())) return s
-  const pad2 = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(
-    d.getMinutes(),
-  )}:${pad2(d.getSeconds())}`
-}
-
-function issueStatusLabel(s: number, hasProblem = true) {
-  if (!hasProblem) return t('reportForm.issueStatusOptions.noIssue')
-  switch (s) {
-    case 0:
-      return t('reportForm.issueStatusOptions.pending')
-    case 1:
-      return t('reportForm.issueStatusOptions.inProgress')
-    case 2:
-      return t('reportForm.issueStatusOptions.completed')
-    case 3:
-      return t('reportForm.issueStatusOptions.incompleted')
-    default:
-      return t('reportForm.issueStatusOptions.noIssue')
-  }
-}
-
-function issueStatusSeverity(s: number, hasProblem = true) {
-  if (!hasProblem) return 'secondary'
-  switch (s) {
-    case 0:
-      return 'warn'
-    case 1:
-      return 'info'
-    case 2:
-      return 'success'
-    case 3:
-      return 'danger'
-    default:
-      return 'secondary'
-  }
-}
-
-function normalizeNoteKey(value: string) {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-}
-
-function translateDetailNote(prGroup: number, note: string) {
-  if (Number(prGroup ?? 0) === 1) {
-    return t('reportForm.detailNotes.validatedImage')
-  }
-
-  switch (normalizeNoteKey(note)) {
-    case normalizeNoteKey('Sự cố an ninh'):
-      return t('reportForm.detailNotes.securityIssues')
-    case normalizeNoteKey('Sự cố cơ điện'):
-      return t('reportForm.detailNotes.electricalIssues')
-    case normalizeNoteKey('Sự cố công trình'):
-      return t('reportForm.detailNotes.constructionIssues')
-    case normalizeNoteKey('Sự cố hành chánh'):
-      return t('reportForm.detailNotes.administrativeIssues')
-    case normalizeNoteKey('Sự cố khác...'):
-    case normalizeNoteKey('Sự cố khác'):
-      return t('reportForm.detailNotes.otherIssues')
-    default:
-      return String(note ?? '').trim() || '—'
-  }
-}
-
-const detailGroups = computed(() => {
-  const groups = props.model?.note_groups ?? []
-  return groups.map((group, groupIndex) => {
-    const noteLabel = translateDetailNote(group.pr_group, group.pri_image_note)
-
-    return {
-      id: `${group.pr_group}-${groupIndex}`,
-      note: noteLabel,
-      items: (group.report_images ?? [])
-        .map((img: ReportImage, idx) => ({
-          id: img.pri_id || `${group.pr_group}-${idx + 1}`,
-          src: img.pri_image,
-          title: noteLabel || t('reportForm.photo'),
-          alt: `${noteLabel || t('reportForm.photo')} ${idx + 1}`,
-        }))
-        .filter((x) => !!(x.src ?? '').trim()),
-    }
-  })
-})
-
-const actualTimeText = computed(() => {
-  const text = String(props.model?.reality_time_str ?? '').trim()
-  return text || '—'
-})
-
-const standardTimeText = computed(() => {
-  const text = String(props.model?.plan_time_str ?? '').trim()
-  return text || '—'
-})
-
-const actualTimeSeverity = computed(() => (props.model?.time_problem ? 'danger' : 'secondary'))
-
-function clearStatusValidationTimer() {
-  if (statusValidationTimer.value != null) {
-    window.clearTimeout(statusValidationTimer.value)
-    statusValidationTimer.value = null
-  }
-}
-
-function clearStatusValidationMessage() {
-  clearStatusValidationTimer()
-  statusValidationMessage.value = ''
-}
-
-function showSameStatusValidationMessage() {
-  clearStatusValidationTimer()
-  statusValidationMessage.value = t('reportForm.validation.selectAnotherStatus')
-  statusValidationTimer.value = window.setTimeout(() => {
-    statusValidationMessage.value = ''
-    statusValidationTimer.value = null
-  }, 3000)
-}
-
-function openViewer(items: BaseImageItem[], startIndex: number, title: string) {
-  if (!items.length) return
-
-  const idx = Math.max(0, Math.min(startIndex, items.length - 1))
-
-  viewerTitle.value = title
-  viewerItems.value = items
-  viewerStartIndex.value = idx
-  viewerVisible.value = true
-}
-
-function startInlineEditStatus() {
-  if (!canEditCurrentStatus.value) return
-  clearStatusValidationMessage()
-  inlineStatusEdit.value = true
-  statusDraft.value = Number(props.model?.pr_status ?? 0)
-}
-
-function cancelInlineEditStatus() {
-  clearStatusValidationMessage()
-  inlineStatusEdit.value = false
-  statusDraft.value = props.model?.pr_has_problem ? Number(props.model.pr_status ?? 0) : 0
-}
-
-function submitStatus() {
-  if (!props.model?.pr_id) return
-
-  const nextStatus = Number(statusDraft.value ?? 0)
-  const currentStatus = Number(props.model.pr_status ?? 0)
-
-  if (nextStatus === currentStatus) {
-    showSameStatusValidationMessage()
-    return
-  }
-
-  clearStatusValidationMessage()
-
-  emit('submit-status', {
-    pr_id: props.model.pr_id,
-    pr_status: nextStatus,
-  })
-}
-
-watch(
-  () => props.visible,
-  (v) => {
-    if (!v) {
-      viewerVisible.value = false
-      viewerItems.value = []
-      inlineStatusEdit.value = false
-      clearStatusValidationMessage()
-    }
-  },
-)
-
-watch(
-  () => [props.model?.pr_id, props.model?.pr_status, props.model?.pr_has_problem, formMode.value],
-  () => {
-    if (!props.model) {
-      statusDraft.value = 0
-      inlineStatusEdit.value = false
-      clearStatusValidationMessage()
-      return
-    }
-    statusDraft.value = props.model.pr_has_problem ? Number(props.model.pr_status ?? 0) : 0
-    inlineStatusEdit.value = false
-    clearStatusValidationMessage()
-  },
-  { immediate: true },
-)
-
-watch(
-  () => statusDraft.value,
-  (nextStatus) => {
-    if (!props.model) return
-    if (Number(nextStatus ?? 0) !== Number(props.model.pr_status ?? 0)) {
-      clearStatusValidationMessage()
-    }
-  },
-)
-
-onBeforeUnmount(() => {
-  clearStatusValidationTimer()
-})
 </script>
 
 <template>
-  <Dialog
-    :visible="visible"
-    modal
-    :header="isExternalEditStatus ? t('reportForm.editIssueStatus') : t('reportForm.reportDetail')"
-    :style="{ width: '980px', maxWidth: '95vw' }"
-    :contentStyle="{ maxHeight: '78vh', overflow: 'auto' }"
-    :closeOnEscape="!viewerVisible"
-    @update:visible="emit('update:visible', $event)"
-    @hide="close"
-  >
-    <div v-if="!model" class="text-slate-500">{{ t('reportForm.noData') }}</div>
-
+  <Dialog :visible="visible" modal :header="title" :style="{ width: '760px', maxWidth: '95vw' }" :closable="!loading" :closeOnEscape="!loading" @update:visible="emit('update:visible', $event)" @hide="close">
+    <div v-if="!model" class="text-slate-500">No report data.</div>
     <div v-else class="space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px] gap-4 items-start">
-        <div class="space-y-4 min-w-0">
-          <div class="space-y-2">
-            <div class="text-xl font-semibold text-slate-800">
-              {{ model.cp_name }} - {{ model.cp_code }}
-            </div>
-            <div>
-              <div class="text-md text-slate-600">
-                {{ t('reportForm.patrolRoute') }}:
-                <span class="text-slate-800 font-semibold">{{
-                  translatedRouteName(model.route_name)
-                }}</span>
-              </div>
-
-              <div class="text-md text-slate-600">
-                <span v-if="shiftText" class="text-slate-600">
-                  {{ t('reportForm.shift') }}:
-                  <span class="text-slate-800 font-semibold">{{ shiftText }}</span>
-                </span>
-              </div>
-
-              <div class="text-md text-slate-600">
-                {{ t('reportForm.area') }}:
-                <span class="text-slate-800 font-semibold">{{ model.area_name }}</span>
-              </div>
-
-              <div class="text-md text-slate-600">
-                {{ t('reportForm.guard') }}:
-                <span class="text-slate-800 font-semibold">{{
-                  model.report_name || model.created_by
-                }}</span>
-              </div>
-
-              <div class="text-md text-slate-600">
-                {{ t('reportForm.reportDate') }}:
-                <span
-                  :class="
-                    model.shift_problem
-                      ? 'text-red-600 font-semibold'
-                      : 'text-slate-800 font-semibold'
-                  "
-                >
-                  {{ formatDateTime(model.report_at || model.scan_at || model.created_at) }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div class="space-y-3">
-            <div class="flex flex-wrap gap-2">
-              <Tag
-                :value="
-                  inspectionOk
-                    ? t('reportForm.inspectionResultTag.ok')
-                    : t('reportForm.inspectionResultTag.notOk')
-                "
-                :severity="inspectionOk ? 'success' : 'danger'"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <div class="text-sm font-semibold text-slate-800">
-                {{ t('reportForm.patrolTime') }}
-              </div>
-              <div class="flex flex-wrap gap-2">
-                <Tag
-                  :value="`${t('reportForm.timeCheck.actual')}: ${actualTimeText}`"
-                  :severity="actualTimeSeverity"
-                />
-                <Tag
-                  :value="`${t('reportForm.timeCheck.standard')}: ${standardTimeText}`"
-                  severity="secondary"
-                />
-              </div>
-            </div>
-          </div>
+      <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">Draft UI only. Report detail fields will be replaced after CMD report API is confirmed.</div>
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <div class="text-sm text-slate-500">Route</div>
+          <div class="font-semibold text-slate-800">{{ model.routeName || '-' }}</div>
         </div>
-
-        <div class="space-y-3">
-          <div class="text-md font-semibold text-slate-800">{{ t('reportForm.issueStatus') }}</div>
-
-          <div v-if="isEditStatus && model.pr_has_problem" class="space-y-3">
-            <div>
-              <label class="block text-sm text-slate-600 mb-1">{{ t('reportForm.status') }}</label>
-              <Select
-                v-model="statusDraft"
-                class="w-full"
-                :options="issueStatusOptions"
-                optionLabel="label"
-                size="small"
-                optionValue="value"
-                :placeholder="t('reportForm.selectStatus')"
-              />
-            </div>
-
-            <div class="text-sm text-slate-600">
-              {{ t('reportForm.updatedBy') }}:
-              <span class="text-slate-800 font-semibold">{{ model.updated_name || '—' }}</span>
-            </div>
-
-            <div v-if="statusValidationMessage" class="text-xs font-medium text-red-600">
-              {{ statusValidationMessage }}
-            </div>
-
-            <div class="flex justify-end gap-2 pt-1">
-              <BaseButton
-                v-if="inlineStatusEdit"
-                :label="t('common.cancel')"
-                severity="secondary"
-                size="small"
-                outlined
-                @click="cancelInlineEditStatus"
-              />
-              <BaseButton
-                :label="t('common.submit')"
-                size="small"
-                severity="success"
-                @click="submitStatus"
-              />
-            </div>
-          </div>
-
-          <div v-else class="space-y-3">
-            <div class="flex items-center justify-between gap-3">
-              <Tag
-                :value="issueStatusLabel(model.pr_status, model.pr_has_problem)"
-                :severity="issueStatusSeverity(model.pr_status, model.pr_has_problem)"
-              />
-
-              <BaseIconButton
-                v-if="canEditCurrentStatus"
-                icon="pi pi-pencil"
-                size="small"
-                severity="secondary"
-                outlined
-                rounded
-                @click="startInlineEditStatus"
-              />
-            </div>
-
-            <div class="text-sm text-slate-600">
-              {{ t('reportForm.updatedBy') }}:
-              <span class="text-slate-800 font-semibold">{{ model.updated_name || '—' }}</span>
-            </div>
-          </div>
+        <div>
+          <div class="text-sm text-slate-500">Checkpoint</div>
+          <div class="font-semibold text-slate-800">{{ model.checkpointName || '-' }}</div>
+        </div>
+        <div>
+          <div class="text-sm text-slate-500">Result</div>
+          <Tag :value="model.inspectionResult || '-'" :severity="resultSeverity" />
+        </div>
+        <div>
+          <div class="text-sm text-slate-500">Status</div>
+          <div class="font-semibold text-slate-800">{{ model.processingStatus || '-' }}</div>
+        </div>
+        <div>
+          <div class="text-sm text-slate-500">Report Date</div>
+          <div class="font-semibold text-slate-800">{{ model.reportAt || '-' }}</div>
+        </div>
+        <div>
+          <div class="text-sm text-slate-500">Report By</div>
+          <div class="font-semibold text-slate-800">{{ model.reportBy || '-' }}</div>
+        </div>
+        <div class="md:col-span-2">
+          <div class="text-sm text-slate-500">Note</div>
+          <div class="whitespace-pre-line text-slate-800">{{ model.note || '-' }}</div>
         </div>
       </div>
-
-      <div class="border-t border-slate-200 pt-3">
-        <div class="text-sm font-semibold text-slate-800 mb-2">{{ t('reportForm.detail') }}</div>
-
-        <div v-if="detailGroups.length === 0" class="text-sm text-slate-500">
-          {{ t('reportForm.noDetailAvailable') }}.
-        </div>
-
-        <div v-else class="space-y-3">
-          <div
-            v-for="(group, groupIndex) in detailGroups"
-            :key="group.id"
-            class="rounded-xl border border-slate-200 bg-slate-50 p-3"
-          >
-            <div class="text-sm font-semibold text-slate-800 mb-2">{{ group.note }}</div>
-
-            <div v-if="group.items.length === 0" class="text-sm text-slate-500">
-              {{ t('reportForm.noImages') }}.
-            </div>
-
-            <div v-else class="flex items-center gap-3 flex-wrap">
-              <button
-                v-for="(img, idx) in group.items"
-                :key="img.id"
-                type="button"
-                class="border border-slate-200 rounded-lg overflow-hidden hover:border-slate-400 transition"
-                @click="openViewer(group.items, idx, group.note)"
-              >
-                <img :src="img.src" :alt="img.alt" class="h-16 w-16 object-cover" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="flex justify-end gap-2 pt-3 border-t border-slate-200">
-        <BaseButton
-          :label="t('common.close')"
-          size="small"
-          severity="secondary"
-          outlined
-          @click="close"
-        />
+      <div class="flex justify-end border-t border-slate-200 pt-3">
+        <BaseButton label="Close" size="small" severity="secondary" outlined @click="close" />
       </div>
     </div>
-
-    <BaseImageViewer
-      v-model:visible="viewerVisible"
-      :title="viewerTitle"
-      :images="viewerItems"
-      :startIndex="viewerStartIndex"
-    />
   </Dialog>
 </template>

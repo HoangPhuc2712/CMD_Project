@@ -1,130 +1,63 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import Dialog from 'primevue/dialog'
-
 import BaseButton from '@/components/common/buttons/BaseButton.vue'
 import BasePasswordInput from '@/components/common/inputs/BasePasswordInput.vue'
+import { changeCurrentUserPassword } from '@/modules/web/users/users.api'
 
-export type ChangePasswordSubmitPayload = {
-  currentPassword: string
-  newPassword: string
-}
-
-const { t } = useI18n()
 const props = defineProps<{
   visible: boolean
+  userId?: string
   loading?: boolean
-  currentPasswordInvalid?: boolean
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:visible', value: boolean): void
-  (e: 'submit', payload: ChangePasswordSubmitPayload): void
+  (e: 'update:visible', v: boolean): void
+  (e: 'saved'): void
   (e: 'close'): void
-  (e: 'current-password-input', value: string): void
 }>()
 
 const submitted = ref(false)
-const submitLocked = ref(false)
-const isSubmitting = computed(() => submitLocked.value || Boolean(props.loading))
-
-const form = reactive({
-  currentPassword: '',
-  newPassword: '',
-  confirmNewPassword: '',
-})
-
-const currentPasswordError = computed(
-  () => submitted.value && !String(form.currentPassword ?? '').trim(),
-)
-const newPasswordError = computed(() => submitted.value && !String(form.newPassword ?? '').trim())
-
-const currentPasswordHasError = computed(
-  () => currentPasswordError.value || Boolean(props.currentPasswordInvalid),
-)
-const currentPasswordMessage = computed(() =>
-  props.currentPasswordInvalid
-    ? t('changePasswordForm.error.currentPasswordIncorrect')
-    : t('changePasswordForm.error.currPasswordRequired'),
-)
-
-const confirmPasswordError = computed(
-  () => submitted.value && !String(form.confirmNewPassword ?? '').trim(),
-)
-const passwordMismatchError = computed(
-  () =>
-    submitted.value &&
-    !!String(form.newPassword ?? '').trim() &&
-    !!String(form.confirmNewPassword ?? '').trim() &&
-    form.newPassword !== form.confirmNewPassword,
-)
-const samePasswordError = computed(
-  () =>
-    submitted.value &&
-    !!String(form.currentPassword ?? '').trim() &&
-    !!String(form.newPassword ?? '').trim() &&
-    form.currentPassword === form.newPassword,
-)
-
-watch(
-  () => props.loading,
-  (loading) => {
-    if (!loading) {
-      submitLocked.value = false
-    }
-  },
-)
-
-watch(
-  () => form.currentPassword,
-  (value) => {
-    emit('current-password-input', value)
-  },
-)
+const form = reactive({ current_password: '', new_password: '', confirm_password: '' })
+const isSubmitting = computed(() => Boolean(props.loading))
+const currentError = computed(() => submitted.value && !form.current_password.trim())
+const newError = computed(() => submitted.value && !form.new_password.trim())
+const confirmError = computed(() => submitted.value && form.confirm_password !== form.new_password)
 
 watch(
   () => props.visible,
   (visible) => {
     if (!visible) {
       submitted.value = false
-      submitLocked.value = false
-      form.currentPassword = ''
-      form.newPassword = ''
-      form.confirmNewPassword = ''
+      form.current_password = ''
+      form.new_password = ''
+      form.confirm_password = ''
     }
   },
 )
 
-function handleDialogVisibleChange(nextVisible: boolean) {
-  if (isSubmitting.value) return
-  emit('update:visible', nextVisible)
-}
-
 function close() {
-  submitted.value = false
-  submitLocked.value = false
-  form.currentPassword = ''
-  form.newPassword = ''
-  form.confirmNewPassword = ''
+  if (isSubmitting.value) return
   emit('update:visible', false)
   emit('close')
 }
 
-function submit() {
-  if (isSubmitting.value) return
-
+async function submit() {
   submitted.value = true
-
-  const currentPassword = String(form.currentPassword ?? '').trim()
-  const newPassword = String(form.newPassword ?? '').trim()
-  const confirmNewPassword = String(form.confirmNewPassword ?? '').trim()
-
-  if (!currentPassword || !newPassword || !confirmNewPassword) return
-  if (newPassword !== confirmNewPassword) return
-  if (currentPassword === newPassword) return
-  submitLocked.value = true
-  emit('submit', { currentPassword, newPassword })
+  if (
+    !props.userId ||
+    !form.current_password.trim() ||
+    !form.new_password.trim() ||
+    form.confirm_password !== form.new_password
+  )
+    return
+  await changeCurrentUserPassword({
+    user_id: props.userId,
+    current_password: form.current_password,
+    new_password: form.new_password,
+  })
+  emit('saved')
+  close()
 }
 </script>
 
@@ -132,70 +65,50 @@ function submit() {
   <Dialog
     :visible="visible"
     modal
-    :header="t('changePasswordForm.title')"
-    :style="{ width: '720px', maxWidth: '95vw' }"
-    :contentStyle="{ maxHeight: '70vh', overflow: 'auto' }"
+    header="Change Password"
+    :style="{ width: '520px', maxWidth: '95vw' }"
     :closable="!isSubmitting"
     :closeOnEscape="!isSubmitting"
-    @update:visible="handleDialogVisibleChange"
+    @update:visible="emit('update:visible', $event)"
     @hide="close"
   >
     <div class="space-y-4">
-      <div class="grid grid-cols-1 gap-4">
-        <div>
-          <label class="block text-sm text-slate-600 mb-1">{{
-            t('changePasswordForm.currentPassword')
-          }}</label>
-          <BasePasswordInput
-            v-model="form.currentPassword"
-            label=""
-            size="small"
-            :placeholder="t('changePasswordForm.entercurrent')"
-            :hasError="currentPasswordHasError"
-            :message="currentPasswordMessage"
-          />
-        </div>
-
-        <div>
-          <label class="block text-sm text-slate-600 mb-1">{{
-            t('changePasswordForm.newPassword')
-          }}</label>
-          <BasePasswordInput
-            v-model="form.newPassword"
-            label=""
-            size="small"
-            :placeholder="t('changePasswordForm.enterNew')"
-            :hasError="newPasswordError || samePasswordError"
-            :message="
-              samePasswordError
-                ? t('changePasswordForm.error.passwordRepeatable')
-                : t('changePasswordForm.error.newPasswordRequired')
-            "
-          />
-        </div>
-
-        <div>
-          <label class="block text-sm text-slate-600 mb-1">{{
-            t('changePasswordForm.confirmPassword')
-          }}</label>
-          <BasePasswordInput
-            v-model="form.confirmNewPassword"
-            label=""
-            size="small"
-            :placeholder="t('changePasswordForm.enterConfirm')"
-            :hasError="confirmPasswordError || passwordMismatchError"
-            :message="
-              passwordMismatchError
-                ? t('changePasswordForm.error.passwordMismatch')
-                : t('changePasswordForm.error.confirmPasswordRequired')
-            "
-          />
-        </div>
+      <div>
+        <label class="mb-1 block text-sm font-medium text-slate-700">Current Password</label>
+        <BasePasswordInput
+          v-model="form.current_password"
+          label=""
+          placeholder="Enter current password"
+          size="small"
+          :hasError="currentError"
+          message="Current password is required."
+        />
       </div>
-
-      <div class="flex justify-end gap-2 pt-3 border-t border-slate-200">
+      <div>
+        <label class="mb-1 block text-sm font-medium text-slate-700">New Password</label>
+        <BasePasswordInput
+          v-model="form.new_password"
+          label=""
+          placeholder="Enter new password"
+          size="small"
+          :hasError="newError"
+          message="New password is required."
+        />
+      </div>
+      <div>
+        <label class="mb-1 block text-sm font-medium text-slate-700">Confirm Password</label>
+        <BasePasswordInput
+          v-model="form.confirm_password"
+          label=""
+          placeholder="Confirm new password"
+          size="small"
+          :hasError="confirmError"
+          message="Password confirmation does not match."
+        />
+      </div>
+      <div class="flex justify-end gap-2 border-t border-slate-200 pt-3">
         <BaseButton
-          :label="t('common.cancel')"
+          label="Cancel"
           size="small"
           severity="danger"
           outlined
@@ -203,7 +116,7 @@ function submit() {
           @click="close"
         />
         <BaseButton
-          :label="t('common.submit')"
+          label="Submit"
           size="small"
           severity="success"
           :loading="isSubmitting"

@@ -2,80 +2,37 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
-import { useI18n } from 'vue-i18n'
-
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
-
-import { useAreasStore } from '@/modules/web/areas/areas.store'
-import { useAuthStore } from '@/stores/auth.store'
-import type { AreaRow } from '@/modules/web/areas/areas.types'
-import { deleteAreaMock, fetchAreaById } from '@/modules/web/areas/areas.api'
-import { fetchCheckpointRows } from '@/modules/web/checkpoints/checkpoints.api'
-import type { CheckpointRow } from '@/modules/web/checkpoints/checkpoints.types'
-import type { CheckpointPrintItem } from '@/services/print/checkpointsPrint.types'
-
-import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
 import BaseDataTable from '@/components/common/BaseDataTable.vue'
-
+import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
+import BaseButton from '@/components/common/buttons/BaseButton.vue'
+import BaseConfirmDelete from '@/components/common/BaseConfirmDelete.vue'
+import { useAuthStore } from '@/stores/auth.store'
+import { useAreasStore } from '@/modules/web/areas/areas.store'
+import { deleteAreaMock, fetchAreaById } from '@/modules/web/areas/areas.api'
+import type { AreaRow } from '@/modules/web/areas/areas.types'
 import AreaForm, {
   type AreaFormMode,
   type AreaFormModel,
 } from '@/modules/web/areas/components/AreaForm.vue'
-import BaseButton from '@/components/common/buttons/BaseButton.vue'
-import BaseConfirmDelete from '@/components/common/BaseConfirmDelete.vue'
-import AreaPrintOptionsDialog from '@/modules/web/areas/components/AreaPrintOptionsDialog.vue'
-import {
-  useDebouncedSearchDraft,
-  useResetFirstOnFilterChange,
-  resetFiltersWithSearchDraft,
-} from '@/composables/useFilters'
 import { usePagination } from '@/composables/usePagination'
 
 const router = useRouter()
 const toast = useToast()
-const store = useAreasStore()
 const auth = useAuthStore()
-const { t, locale } = useI18n()
-
+const store = useAreasStore()
 const canManage = computed(() => auth.isAdminUser && auth.canAccess('areas.manage'))
-const areaPrintOptions = computed(() =>
-  [...store.rows]
-    .sort((a, b) => Number(a.area_id ?? 0) - Number(b.area_id ?? 0))
-    .map((row) => ({
-      label: row.area_name || row.area_code || String(row.area_id),
-      value: row.area_id,
-    })),
-)
 const exporting = ref(false)
-const printOptionsVisible = ref(false)
-const printingAreaId = ref<number | null>(null)
-const DELETE_AREA_API_DRY_RUN = false
-
-const areaStatusOptions = computed(() => [
-  { label: t('areaList.areaStatusOptions.all'), value: 'ALL' },
-  { label: t('areaList.areaStatusOptions.active'), value: 'ACTIVE' },
-  {
-    label: t('areaList.areaStatusOptions.inactive'),
-    value: 'INACTIVE',
-  },
-])
+const selectedRows = ref<AreaRow[] | null>(null)
 const confirmDeleteVisible = ref(false)
 const confirmDeleteMessage = ref('')
 const confirmDeleteLoading = ref(false)
 const pendingDeleteAction = ref<null | (() => Promise<void>)>(null)
-
-const { searchDraft } = useDebouncedSearchDraft({
-  source: () => store.searchText,
-  commit: (value) => {
-    store.searchText = value
-  },
-})
-
-useResetFirstOnFilterChange(
-  () => [store.searchText, store.filterStatus],
-  () => store.setFirst(0),
-)
+const formVisible = ref(false)
+const formMode = ref<AreaFormMode>('view')
+const formModel = ref<AreaFormModel | null>(null)
+const formSubmitting = ref(false)
 
 const { onPage } = usePagination({
   load: () => store.load(),
@@ -83,127 +40,48 @@ const { onPage } = usePagination({
   setPage: (first, rows) => store.setPage(first, rows),
 })
 
-onMounted(async () => {
-  await store.load()
-})
+onMounted(() => store.load())
 
-function statusLabel(s: number) {
-  return s === 1 ? t('areaList.areaStatusOptions.active') : t('areaList.areaStatusOptions.inactive')
+function statusLabel(value: number) {
+  return value === 1 ? 'Active' : 'Inactive'
+}
+function statusSeverity(value: number) {
+  return value === 1 ? 'success' : 'secondary'
+}
+function mapRow(row: AreaRow): AreaFormModel {
+  return { area_id: row.area_id, area_code: row.area_code, area_name: row.area_name }
 }
 
-function statusSeverity(s: number) {
-  return s === 1 ? 'success' : 'secondary'
+function goToAreaCheckpoints(row: AreaRow) {
+  router.push({ name: 'checkpoints', query: { areaId: row.area_id, areaCode: row.area_code } })
 }
-
-function onColumnFilter(payload: { key: string; value: any }) {
-  if (payload.key === 'status') store.filterStatus = payload.value ?? 'ALL'
-}
-
-function clearAll() {
-  resetFiltersWithSearchDraft({
-    clear: () => store.clearFilters(),
-    searchDraft,
-  })
-}
-
-async function onExport() {
-  exporting.value = true
-  try {
-    const { exportAreasXlsx } = await import('@/services/export/areas.export')
-
-    await exportAreasXlsx({
-      rows: await store.getRowsForExport(),
-      fileName: `areas_${new Date().toISOString().slice(0, 10)}.xlsx`,
-    })
-  } catch (e: any) {
-    toast.add({
-      severity: 'error',
-      summary: 'Error',
-      detail: String(e?.message ?? t('areaList.errors.exportFailed')),
-      life: 3000,
-    })
-  } finally {
-    exporting.value = false
-  }
-}
-
-const selectedAreas = ref<AreaRow[] | null>(null)
-
-const formVisible = ref(false)
-const formMode = ref<AreaFormMode>('view')
-const formModel = ref<AreaFormModel | null>(null)
-const formSubmitting = ref(false)
-
-function mapRowToFormModel(row: AreaRow): AreaFormModel {
-  return {
-    area_id: row.area_id,
-    area_code: row.area_code,
-    area_name: row.area_name,
-  }
-}
-
-function goToAreaCheckPoints(row: AreaRow) {
-  router.push({
-    name: 'checkpoints',
-    query: {
-      areaId: row.area_id,
-      areaCode: row.area_code,
-    },
-  })
-}
-
 function openNew() {
   formMode.value = 'new'
-  formModel.value = {
-    area_code: '',
-    area_name: '',
-  }
+  formModel.value = { area_code: '', area_name: '' }
   formVisible.value = true
 }
-
 async function openView(row: AreaRow) {
   formMode.value = 'view'
-  const detail = (await fetchAreaById(row.area_id)) ?? row
-  formModel.value = mapRowToFormModel(detail as AreaRow)
+  formModel.value = mapRow((await fetchAreaById(row.area_id)) ?? row)
   formVisible.value = true
 }
-
 async function openEdit(row: AreaRow) {
   formMode.value = 'edit'
-  const detail = (await fetchAreaById(row.area_id)) ?? row
-  formModel.value = mapRowToFormModel(detail as AreaRow)
+  formModel.value = mapRow((await fetchAreaById(row.area_id)) ?? row)
   formVisible.value = true
 }
-
-function getAreaDeleteBlockedCount(row: AreaRow) {
-  return Number(row.total_checkpoints ?? 0)
-}
-
-function logAreaDeleteDryRun(row: AreaRow) {
-  console.log('[DRY RUN] deleteArea skipped', {
-    payload: { area_id: row.area_id, actor_id: auth.user?.user_id ?? '' },
-    row,
-  })
-}
-
-async function doDeleteOne(row: AreaRow) {
-  if (DELETE_AREA_API_DRY_RUN) {
-    logAreaDeleteDryRun(row)
-    return
-  }
-
-  await deleteAreaMock({ area_id: row.area_id, actor_id: auth.user?.user_id ?? '' })
-}
-
 function openDeleteConfirm(message: string, action: () => Promise<void>) {
   confirmDeleteMessage.value = message
   pendingDeleteAction.value = action
   confirmDeleteVisible.value = true
 }
-
+function closeDeleteConfirm() {
+  confirmDeleteVisible.value = false
+  confirmDeleteLoading.value = false
+  pendingDeleteAction.value = null
+}
 async function onConfirmDelete() {
   if (!pendingDeleteAction.value || confirmDeleteLoading.value) return
-
   confirmDeleteLoading.value = true
   try {
     await pendingDeleteAction.value()
@@ -214,242 +92,68 @@ async function onConfirmDelete() {
   }
 }
 
-function closeDeleteConfirm() {
-  confirmDeleteVisible.value = false
-  confirmDeleteLoading.value = false
-  pendingDeleteAction.value = null
-}
-
-async function onDelete(row: AreaRow) {
-  const checkpointCount = getAreaDeleteBlockedCount(row)
-  if (checkpointCount > 0) {
-    toast.add({
-      severity: 'warn',
-      summary: t('common.cannotDelete'),
-      detail: `${t('areaList.errors.cannotDeleteSingleArea')} ${t('areaList.errors.becauseItHas')} ${checkpointCount} ${t('areaList.errors.checkpoints')}.`,
-      life: 3500,
-    })
-    return
-  }
-
-  openDeleteConfirm(
-    `${t('areaList.errors.areYouSure')} ${row.area_code} - ${row.area_name}?`,
-    async () => {
-      try {
-        await doDeleteOne(row)
-
-        if (DELETE_AREA_API_DRY_RUN) {
-          toast.add({
-            severity: 'info',
-            summary: 'Delete API Disabled',
-            detail: 'Delete API is disabled for testing. Check console log.',
-            life: 3000,
-          })
-          return
-        }
-
-        await store.load()
-        selectedAreas.value = null
-        toast.add({
-          severity: 'success',
-          summary: t('common.deleted'),
-          detail: t('areaList.success.deleteDetail'),
-          life: 2000,
-        })
-      } catch (e: any) {
-        const msg = String(e?.message ?? '')
-        if (msg.startsWith('AREA_HAS_SCAN_POINTS:')) {
-          const n = Number(msg.split(':')[1] ?? 0)
-          toast.add({
-            severity: 'warn',
-            summary: t('common.cannotDelete'),
-            detail: `${t('areaList.errors.cannotDeleteSingleArea')} ${row.area_code} ${t('areaList.errors.becauseItHas')} ${n} ${t('areaList.errors.checkpoints')}`,
-            life: 3500,
-          })
-          return
-        }
-        toast.add({
-          severity: 'error',
-          summary: t('common.error'),
-          detail: msg || t('areaList.errors.deleteFailed'),
-          life: 3000,
-        })
-        throw e
-      }
-    },
-  )
+function onDelete(row: AreaRow) {
+  openDeleteConfirm(`Delete ${row.area_code} - ${row.area_name}?`, async () => {
+    await deleteAreaMock({ area_id: row.area_id, actor_id: auth.user?.user_id ?? '' })
+    await store.load()
+    selectedRows.value = null
+    toast.add({ severity: 'success', summary: 'Deleted', detail: 'Area deleted.', life: 2000 })
+  })
 }
 
 function onDeleteSelected() {
-  const sel = selectedAreas.value ?? []
-  if (!sel.length) return
-
-  const blocked = sel.filter((row) => getAreaDeleteBlockedCount(row) > 0)
-  if (blocked.length) {
-    toast.add({
-      severity: 'warn',
-      summary: t('common.cannotDelete'),
-      detail: `${t('areaList.errors.cannotDeleteMultipleAreas')} ${blocked.length} ${t('areaList.errors.becauseItContains')}.`,
-      life: 3500,
-    })
-    return
-  }
-
-  openDeleteConfirm(
-    `${t('areaList.errors.areYouSureMultiple')} ${sel.length} ${t('areaList.errors.selectedAreas')}?`,
-    async () => {
-      try {
-        for (const row of sel) {
-          await doDeleteOne(row)
-        }
-
-        if (DELETE_AREA_API_DRY_RUN) {
-          toast.add({
-            severity: 'info',
-            summary: 'Delete API Disabled',
-            detail: 'Delete API is disabled for testing. Check console log.',
-            life: 3000,
-          })
-          return
-        }
-
-        await store.load()
-        selectedAreas.value = null
-        toast.add({
-          severity: 'success',
-          summary: t('common.deleted'),
-          detail: t('areaList.success.DeleteMultipleDetail'),
-          life: 2000,
-        })
-      } catch (e: any) {
-        const msg = String(e?.message ?? '')
-        if (msg.startsWith('AREA_HAS_SCAN_POINTS:')) {
-          const n = Number(msg.split(':')[1] ?? 0)
-          toast.add({
-            severity: 'warn',
-            summary: t('common.cannotDelete'),
-            detail: `${t('areaList.errors.areaDeleteRestricted')} ${n} ${t('areaList.errors.checkpoints')}`,
-            life: 3500,
-          })
-          return
-        }
-        toast.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: msg || t('areaList.errors.deleteFailed'),
-          life: 3000,
-        })
-        throw e
-      }
-    },
-  )
-}
-
-function buildAreaPrintItems(row: AreaRow, checkpoints: CheckpointRow[]): CheckpointPrintItem[] {
-  return (checkpoints ?? [])
-    .filter((cp) => Number(cp.area_id) === Number(row.area_id))
-    .sort(
-      (a, b) =>
-        Number(a.cp_priority ?? 0) - Number(b.cp_priority ?? 0) ||
-        String(a.cp_code ?? '').localeCompare(String(b.cp_code ?? '')),
-    )
-    .map((cp) => ({
-      areaLabel: cp.area_code || cp.area_name || row.area_code || row.area_name,
-      cpName: cp.cp_name,
-      cpCode: cp.cp_code,
-      cpPriority: cp.cp_priority,
-      qrSrc: cp.cp_qr,
-    }))
-}
-
-async function onPrintAreaQr(row: AreaRow) {
-  printingAreaId.value = row.area_id
-  try {
-    const checkpoints = (await fetchCheckpointRows([], { page: 1, pageSize: 100000 })).items
-    const items = buildAreaPrintItems(row, checkpoints)
-
-    if (!items.length) {
-      toast.add({
-        severity: 'warn',
-        summary: t('areaList.errors.noQr'),
-        detail: `${t('areaList.errors.noQrDetail')} ${row.area_code}.`,
-        life: 3000,
-      })
-      return
-    }
-
-    const { printCheckpointQrSheets } = await import('@/services/print/checkpoints.print')
-
-    await printCheckpointQrSheets(items, `${row.area_code || row.area_name} Qr Codes`)
-  } catch (e: any) {
-    const msg = String(e?.message ?? '')
-    toast.add({
-      severity: 'error',
-      summary: t('areaList.errors.qrPdfError'),
-      detail:
-        msg === 'QR_IMAGE_NOT_FOUND'
-          ? t('areaList.errors.noQrAvailable')
-          : msg === 'QR_IMAGE_FORMAT_NOT_SUPPORTED'
-            ? t('areaList.errors.qrUnsupport')
-            : msg || t('areaList.errors.qrExportFailed'),
-      life: 3500,
-    })
-  } finally {
-    printingAreaId.value = null
-  }
-}
-
-async function handleAreaFormSubmit(payload: { submit: (actor_id: string) => Promise<void> }) {
-  if (formSubmitting.value) return
-
-  const actor = auth.user?.user_id ?? ''
-  if (!actor) return
-
-  formSubmitting.value = true
-
-  try {
-    await payload.submit(actor)
+  const rows = selectedRows.value ?? []
+  if (!rows.length) return
+  openDeleteConfirm(`Delete ${rows.length} selected area(s)?`, async () => {
+    for (const row of rows)
+      await deleteAreaMock({ area_id: row.area_id, actor_id: auth.user?.user_id ?? '' })
     await store.load()
-
-    formVisible.value = false
-    formModel.value = null
-    selectedAreas.value = null
-
+    selectedRows.value = null
     toast.add({
       severity: 'success',
-      summary: t('common.save'),
-      detail: t('areaList.success.savedDetail'),
+      summary: 'Deleted',
+      detail: 'Selected areas deleted.',
       life: 2000,
     })
+  })
+}
+
+async function onExport() {
+  exporting.value = true
+  try {
+    const { exportAreasXlsx } = await import('@/services/export/areas.export')
+    await exportAreasXlsx({
+      rows: await store.getRowsForExport(),
+      fileName: `cmd_areas_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    })
   } catch (e: any) {
-    const msg = String(e?.message ?? '')
-
-    if (msg.startsWith('MISSING_FIELDS:')) {
-      const fields = msg.replace('MISSING_FIELDS:', '').trim()
-      toast.add({
-        severity: 'warn',
-        summary: 'Validation',
-        detail: fields ? `Please fill: ${fields}.` : 'Please fill required fields.',
-        life: 3200,
-      })
-      return
-    }
-
-    if (msg === 'AREA_CODE_EXISTS') {
-      toast.add({
-        severity: 'warn',
-        summary: t('areaList.errors.duplicate'),
-        detail: t('areaList.errors.areaCodeExist'),
-        life: 3000,
-      })
-      return
-    }
-
     toast.add({
       severity: 'error',
-      summary: t('common.error'),
-      detail: msg || t('areaList.errors.saveAreaFailed'),
-      life: 3500,
+      summary: 'Error',
+      detail: String(e?.message ?? 'Export failed.'),
+      life: 3000,
+    })
+  } finally {
+    exporting.value = false
+  }
+}
+
+async function handleFormSubmit(payload: { submit: (actor_id: string) => Promise<void> }) {
+  if (formSubmitting.value) return
+  formSubmitting.value = true
+  try {
+    await payload.submit(auth.user?.user_id ?? '')
+    await store.load()
+    formVisible.value = false
+    formModel.value = null
+    selectedRows.value = null
+    toast.add({ severity: 'success', summary: 'Saved', detail: 'Area saved.', life: 2000 })
+  } catch (e: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: String(e?.message ?? 'Failed to save area.'),
+      life: 3000,
     })
   } finally {
     formSubmitting.value = false
@@ -459,71 +163,55 @@ async function handleAreaFormSubmit(payload: { submit: (actor_id: string) => Pro
 
 <template>
   <div class="space-y-3">
-    <div class="text-[26px] font-semibold text-slate-800">{{ t('areaList.title') }}</div>
-
+    <div>
+      <h1 class="text-[26px] font-semibold text-slate-800">Areas</h1>
+      <p class="text-sm text-slate-500">Draft area management UI for CMD.</p>
+    </div>
     <BaseDataTable
-      :key="`area-list-table-${locale}`"
+      v-model:modelSearch="store.searchText"
       title="Areas"
       :value="store.filteredRows"
       :loading="store.loading"
       dataKey="area_id"
-      v-model:selection="selectedAreas"
+      v-model:selection="selectedRows"
       :rows="store.rowsPerPage"
       :first="store.first"
       lazy
       :totalRecords="store.totalRecords"
-      :modelSearch="searchDraft"
-      @update:modelSearch="searchDraft = $event"
-      @update:columnFilter="onColumnFilter"
-      @clear="clearAll"
+      @clear="store.clearFilters"
       @page="onPage"
     >
       <template v-if="canManage" #toolbar-start>
         <BaseIconButton
           icon="pi pi-plus"
-          :label="t('common.new')"
+          label="New"
           size="small"
           severity="success"
-          :disabled="!canManage"
           @click="openNew"
         />
         <BaseIconButton
           icon="pi pi-trash"
-          :label="t('common.delete')"
+          label="Delete"
           size="small"
           severity="danger"
           outlined
-          :disabled="!canManage || !(selectedAreas && selectedAreas.length)"
+          :disabled="!(selectedRows && selectedRows.length)"
           @click="onDeleteSelected"
         />
       </template>
-
       <template #toolbar-end>
-        <div class="flex justify-end gap-2">
-          <BaseIconButton
-            v-if="canManage"
-            icon="pi pi-file-pdf"
-            :label="t('areaList.checkpointExportPdf')"
-            iconClass="text-rose-600"
-            size="small"
-            severity="secondary"
-            outlined
-            @click="printOptionsVisible = true"
-          />
-          <BaseIconButton
-            icon="pi pi-file-excel"
-            :label="t('common.export')"
-            iconClass="text-emerald-600"
-            size="small"
-            severity="secondary"
-            outlined
-            :loading="exporting"
-            :disabled="exporting"
-            @click="onExport"
-          />
-        </div>
+        <BaseIconButton
+          icon="pi pi-file-excel"
+          label="Export"
+          iconClass="text-emerald-600"
+          size="small"
+          severity="secondary"
+          outlined
+          :loading="exporting"
+          :disabled="exporting"
+          @click="onExport"
+        />
       </template>
-
       <Column
         v-if="canManage"
         selectionMode="multiple"
@@ -531,33 +219,26 @@ async function handleAreaFormSubmit(payload: { submit: (actor_id: string) => Pro
         :exportable="false"
         sortDisabled
       />
-
-      <Column field="area_code" :header="t('areaList.areaCode')" sortDisabled />
-      <Column field="area_name" :header="t('areaList.areaName')" sortDisabled />
-
-      <Column :header="t('areaList.areaCheckPoints')" sortDisabled>
-        <template #body="{ data }">
-          <BaseButton
-            :label="`${t('common.view')} (${data.total_checkpoints ?? 0})`"
+      <Column field="area_code" header="Area Code" sortDisabled />
+      <Column field="area_name" header="Area Name" sortDisabled />
+      <Column header="Checkpoints" sortDisabled>
+        <template #body="{ data }"
+          ><BaseButton
+            :label="`View (${data.total_checkpoints ?? 0})`"
             severity="secondary"
             outlined
-            @click="goToAreaCheckPoints(data)"
-          />
-        </template>
+            @click="goToAreaCheckpoints(data)"
+        /></template>
       </Column>
-
-      <Column :header="t('areaList.status')" sortDisabled>
-        <template #body="{ data }">
-          <Tag
+      <Column header="Status" sortDisabled
+        ><template #body="{ data }"
+          ><Tag
             :value="statusLabel(data.area_status)"
-            :severity="statusSeverity(data.area_status)"
-          />
-        </template>
-      </Column>
-
-      <Column :header="t('common.action')" :exportable="false" sortDisabled>
-        <template #body="{ data }">
-          <div class="flex gap-2 justify-start">
+            :severity="statusSeverity(data.area_status)" /></template
+      ></Column>
+      <Column header="Action" :exportable="false" sortDisabled
+        ><template #body="{ data }"
+          ><div class="flex gap-2">
             <BaseIconButton
               icon="pi pi-eye"
               size="small"
@@ -565,20 +246,7 @@ async function handleAreaFormSubmit(payload: { submit: (actor_id: string) => Pro
               outlined
               rounded
               @click="openView(data)"
-            />
-            <BaseIconButton
-              v-if="canManage"
-              icon="pi pi-file-pdf"
-              size="small"
-              severity="secondary"
-              outlined
-              rounded
-              ariaLabel="Export Qr PDF"
-              :loading="printingAreaId === data.area_id"
-              :disabled="printingAreaId === data.area_id"
-              @click="onPrintAreaQr(data)"
-            />
-            <BaseIconButton
+            /><BaseIconButton
               v-if="canManage"
               icon="pi pi-pencil"
               size="small"
@@ -586,8 +254,7 @@ async function handleAreaFormSubmit(payload: { submit: (actor_id: string) => Pro
               outlined
               rounded
               @click="openEdit(data)"
-            />
-            <BaseIconButton
+            /><BaseIconButton
               v-if="canManage"
               icon="pi pi-trash"
               size="small"
@@ -595,12 +262,9 @@ async function handleAreaFormSubmit(payload: { submit: (actor_id: string) => Pro
               outlined
               rounded
               @click="onDelete(data)"
-            />
-          </div>
-        </template>
-      </Column>
+            /></div></template
+      ></Column>
     </BaseDataTable>
-
     <BaseConfirmDelete
       :visible="confirmDeleteVisible"
       :message="confirmDeleteMessage"
@@ -609,16 +273,13 @@ async function handleAreaFormSubmit(payload: { submit: (actor_id: string) => Pro
       @cancel="closeDeleteConfirm"
       @confirm="onConfirmDelete"
     />
-
     <AreaForm
       v-model:visible="formVisible"
       :mode="formMode"
       :model="formModel"
       :loading="formSubmitting"
-      @submit="handleAreaFormSubmit"
+      @submit="handleFormSubmit"
       @close="formModel = null"
     />
-
-    <AreaPrintOptionsDialog v-model:visible="printOptionsVisible" :areaOptions="areaPrintOptions" />
   </div>
 </template>

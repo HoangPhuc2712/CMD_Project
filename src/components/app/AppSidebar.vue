@@ -1,7 +1,6 @@
 <script setup lang="ts">
 defineOptions({ inheritAttrs: false })
 import { computed, useAttrs } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { useRoute, RouterLink } from 'vue-router'
 
 const props = withDefaults(
@@ -21,7 +20,6 @@ const emit = defineEmits<{
 
 const route = useRoute()
 const attrs = useAttrs()
-const { t } = useI18n()
 
 type NavItem = {
   key: string
@@ -32,12 +30,12 @@ type NavItem = {
 }
 
 const navItems = computed<NavItem[]>(() => [
-  { key: 'DASHBOARD', label: t('dashboard.title'), to: '/dashboard', icon: 'pi pi-home', prefix: '/dashboard' },
-  { key: 'USERS', label: t('breadcrumb.users'), to: '/users', icon: 'pi pi-users', prefix: '/users' },
-  { key: 'ROLES', label: t('breadcrumb.roles'), to: '/roles', icon: 'pi pi-key', prefix: '/roles' },
-  { key: 'AREAS', label: t('breadcrumb.areas'), to: '/areas', icon: 'pi pi-map-marker', prefix: '/areas' },
-  { key: 'ROUTES', label: t('breadcrumb.routes'), to: '/routes', icon: 'pi pi-map', prefix: '/routes' },
-  { key: 'REPORTS', label: t('breadcrumb.reports'), to: '/reports', icon: 'pi pi-clipboard', prefix: '/reports' },
+  { key: 'DASHBOARD', label: 'Dashboard', to: '/dashboard', icon: 'pi pi-home', prefix: '/dashboard' },
+  { key: 'USERS', label: 'Users', to: '/users', icon: 'pi pi-users', prefix: '/users' },
+  { key: 'ROLES', label: 'Roles', to: '/roles', icon: 'pi pi-key', prefix: '/roles' },
+  { key: 'AREAS', label: 'Areas', to: '/areas', icon: 'pi pi-map-marker', prefix: '/areas' },
+  { key: 'ROUTES', label: 'Routes', to: '/routes', icon: 'pi pi-map', prefix: '/routes' },
+  { key: 'REPORTS', label: 'Reports', to: '/reports', icon: 'pi pi-clipboard', prefix: '/reports' },
 ])
 
 function closeMobile() {
@@ -54,10 +52,10 @@ function itemClass(active: boolean) {
 
 function isActivePath(prefix: string) {
   if (prefix === '/areas') {
-    return route.path === '/areas' || route.path.startsWith('/areas/') || route.path === '/checkpoints'
+    return route.path === '/areas' || route.path === '/checkpoints'
   }
   if (prefix === '/reports') {
-    return route.path === '/reports' || route.path.startsWith('/reports/') || route.path === '/patrol-detail-reports'
+    return route.path === '/reports' || route.path === '/patrol-detail-reports'
   }
   return route.path === prefix || route.path.startsWith(prefix + '/')
 }
