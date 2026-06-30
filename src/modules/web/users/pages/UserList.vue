@@ -2,7 +2,7 @@
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
 import BaseDataTable from '@/components/common/BaseDataTable.vue'
-import { useUsersStore } from '@/modules/users/users.store'
+import { useUsersStore } from '@/modules/web/users/users.store'
 import { useI18n } from 'vue-i18n'
 
 const store = useUsersStore()
@@ -24,6 +24,24 @@ const { t } = useI18n()
       :rows="25"
       @clear="store.clearFilters"
     >
+      <template #toolbar-start>
+        <BaseIconButton
+          icon="pi pi-plus"
+          :label="t('common.add')"
+          size="small"
+          severity="success"
+          @click="$router.push({ name: 'UserCreate' })"
+        />
+        <BaseIconButton
+          icon="pi pi-trash"
+          :label="t('common.delete')"
+          size="small"
+          severity="danger"
+          outlined
+          @click="$router.push({ name: 'UserDelete' })"
+        />
+      </template>
+      <Column selection-mode="multiple" style="width: 3em" />
       <Column field="code" :header="t('users.columns.code')" />
       <Column field="name" :header="t('users.columns.name')" />
       <Column field="roleCode" :header="t('users.columns.role')" />

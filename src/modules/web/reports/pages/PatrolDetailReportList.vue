@@ -8,7 +8,7 @@ import { useI18n } from 'vue-i18n'
 import BaseDataTable from '@/components/common/BaseDataTable.vue'
 import BaseButtonGroup from '@/components/common/buttons/BaseButtonGroup.vue'
 import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
-import { usePatrolDetailReportsStore } from '@/modules/reports/patrolDetailReports.store'
+import { usePatrolDetailReportsStore } from '@/modules/web/reports/patrolDetailReports.store'
 
 const store = usePatrolDetailReportsStore()
 const toast = useToast()
@@ -74,8 +74,9 @@ async function onExport() {
 
 <template>
   <div class="space-y-4">
-    <div>
+    <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-slate-900">{{ t('patrolDetailReport.title') }}</h1>
+      <BaseButtonGroup :buttons="reportSwitchButtons" />
     </div>
     <BaseDataTable
       v-model:modelSearch="store.searchText"
@@ -87,22 +88,20 @@ async function onExport() {
       :rows="25"
       @clear="store.clearFilters"
     >
-      <template #toolbar-start>
-        <BaseButtonGroup :buttons="reportSwitchButtons" />
-      </template>
-
       <template #toolbar-end>
         <BaseIconButton
           icon="pi pi-file-excel"
           :label="t('common.export')"
           size="small"
-          severity="success"
+          severity="secondary"
           outlined
           :loading="exporting"
           @click="onExport"
         />
       </template>
 
+      <Column field="routeName" :header="t('patrolDetailReport.columns.routeName')" />
+      <Column field="checkpointName" :header="t('patrolDetailReport.columns.checkpointName')" />
       <Column
         field="shiftName"
         :header="t('patrolDetailReport.columns.shift')"
@@ -114,8 +113,6 @@ async function onExport() {
           </div>
         </template>
       </Column>
-      <Column field="routeName" :header="t('patrolDetailReport.columns.routeName')" />
-      <Column field="checkpointName" :header="t('patrolDetailReport.columns.checkpointName')" />
       <Column field="patrolTime" :header="t('patrolDetailReport.columns.patrolTime')" />
       <Column field="reportBy" :header="t('patrolDetailReport.columns.reportBy')" />
       <Column field="result" :header="t('patrolDetailReport.columns.result')">

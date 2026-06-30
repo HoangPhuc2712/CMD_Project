@@ -2,7 +2,7 @@
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
 import BaseDataTable from '@/components/common/BaseDataTable.vue'
-import { useRoutesStore } from '@/modules/routes/routes.store'
+import { useRoutesStore } from '@/modules/web/routes/routes.store'
 import { useI18n } from 'vue-i18n'
 
 const store = useRoutesStore()
@@ -24,6 +24,24 @@ const { t } = useI18n()
       :rows="25"
       @clear="store.clearFilters"
     >
+      <template #toolbar-start>
+        <BaseIconButton
+          icon="pi pi-plus"
+          :label="t('common.add')"
+          size="small"
+          severity="success"
+          @click="$router.push({ name: 'RouteCreate' })"
+        />
+        <BaseIconButton
+          icon="pi pi-trash"
+          :label="t('common.delete')"
+          size="small"
+          severity="danger"
+          outlined
+          @click="$router.push({ name: 'RouteDelete' })"
+        />
+      </template>
+      <Column selection-mode="multiple" style="width: 3em" />
       <Column field="code" :header="t('routes.columns.code')" />
       <Column field="name" :header="t('routes.columns.name')" />
       <Column field="area" :header="t('routes.columns.area')" />

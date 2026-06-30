@@ -2,8 +2,9 @@
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
 import BaseDataTable from '@/components/common/BaseDataTable.vue'
-import { useAreasStore } from '@/modules/areas/areas.store'
+import { useAreasStore } from '@/modules/web/areas/areas.store'
 import { useI18n } from 'vue-i18n'
+import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
 
 const store = useAreasStore()
 const { t } = useI18n()
@@ -24,6 +25,24 @@ const { t } = useI18n()
       :rows="25"
       @clear="store.clearFilters"
     >
+      <template #toolbar-start>
+        <BaseIconButton
+          icon="pi pi-plus"
+          :label="t('common.add')"
+          size="small"
+          severity="success"
+          @click="$router.push({ name: 'AreaCreate' })"
+        />
+        <BaseIconButton
+          icon="pi pi-trash"
+          :label="t('common.delete')"
+          size="small"
+          severity="danger"
+          outlined
+          @click="$router.push({ name: 'AreaDelete' })"
+        />
+      </template>
+      <Column selection-mode="multiple" style="width: 3em" />
       <Column field="code" :header="t('areas.columns.code')" />
       <Column field="name" :header="t('areas.columns.name')" />
       <Column field="factory" :header="t('areas.columns.factory')" />

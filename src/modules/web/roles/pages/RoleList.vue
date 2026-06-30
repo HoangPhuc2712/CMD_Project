@@ -2,7 +2,7 @@
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
 import BaseDataTable from '@/components/common/BaseDataTable.vue'
-import { useRolesStore } from '@/modules/roles/roles.store'
+import { useRolesStore } from '@/modules/web/roles/roles.store'
 import { useI18n } from 'vue-i18n'
 
 const store = useRolesStore()
@@ -24,6 +24,24 @@ const { t } = useI18n()
       :rows="25"
       @clear="store.clearFilters"
     >
+      <template #toolbar-start>
+        <BaseIconButton
+          icon="pi pi-plus"
+          :label="t('common.add')"
+          size="small"
+          severity="success"
+          @click="$router.push({ name: 'RoleCreate' })"
+        />
+        <BaseIconButton
+          icon="pi pi-trash"
+          :label="t('common.delete')"
+          size="small"
+          severity="danger"
+          outlined
+          @click="$router.push({ name: 'RoleDelete' })"
+        />
+      </template>
+      <Column selection-mode="multiple" style="width: 3em" />
       <Column field="code" :header="t('roles.columns.code')" />
       <Column field="name" :header="t('roles.columns.name')" />
       <Column field="status" :header="t('common.status')">

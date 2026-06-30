@@ -2,6 +2,6 @@ export const routesRoutes = [
   {
     path: 'routes',
     name: 'routes',
-    component: () => import('@/modules/routes/pages/RouteList.vue'),
+    component: () => import('@/modules/web/routes/pages/RouteList.vue'),
   },
 ]

@@ -10,32 +10,32 @@ export const router = createRouter({
 async function clearPageFiltersByRouteName(routeName: string | symbol | null | undefined) {
   switch (routeName) {
     case 'areas': {
-      const { useAreasStore } = await import('@/modules/areas/areas.store')
+      const { useAreasStore } = await import('@/modules/web/areas/areas.store')
       useAreasStore().clearFilters()
       break
     }
     case 'reports': {
-      const { useReportsStore } = await import('@/modules/reports/reports.store')
+      const { useReportsStore } = await import('@/modules/web/reports/reports.store')
       useReportsStore().clearFilters()
       break
     }
     case 'patrol-detail-reports': {
-      const { usePatrolDetailReportsStore } = await import('@/modules/reports/patrolDetailReports.store')
+      const { usePatrolDetailReportsStore } = await import('@/modules/web/reports/patrolDetailReports.store')
       usePatrolDetailReportsStore().clearFilters()
       break
     }
     case 'roles': {
-      const { useRolesStore } = await import('@/modules/roles/roles.store')
+      const { useRolesStore } = await import('@/modules/web/roles/roles.store')
       useRolesStore().clearFilters()
       break
     }
     case 'routes': {
-      const { useRoutesStore } = await import('@/modules/routes/routes.store')
+      const { useRoutesStore } = await import('@/modules/web/routes/routes.store')
       useRoutesStore().clearFilters()
       break
     }
     case 'users': {
-      const { useUsersStore } = await import('@/modules/users/users.store')
+      const { useUsersStore } = await import('@/modules/web/users/users.store')
       useUsersStore().clearFilters()
       break
     }

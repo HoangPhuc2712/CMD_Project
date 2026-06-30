@@ -8,7 +8,7 @@ import { useI18n } from 'vue-i18n'
 import BaseDataTable from '@/components/common/BaseDataTable.vue'
 import BaseButtonGroup from '@/components/common/buttons/BaseButtonGroup.vue'
 import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
-import { useReportsStore } from '@/modules/reports/reports.store'
+import { useReportsStore } from '@/modules/web/reports/reports.store'
 
 const store = useReportsStore()
 const toast = useToast()
@@ -62,8 +62,9 @@ async function onExport() {
 
 <template>
   <div class="space-y-4">
-    <div>
+    <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-slate-900">{{ t('reportList.title') }}</h1>
+      <BaseButtonGroup :buttons="reportSwitchButtons" />
     </div>
     <BaseDataTable
       v-model:modelSearch="store.searchText"
@@ -75,16 +76,12 @@ async function onExport() {
       :rows="25"
       @clear="store.clearFilters"
     >
-      <template #toolbar-start>
-        <BaseButtonGroup :buttons="reportSwitchButtons" />
-      </template>
-
       <template #toolbar-end>
         <BaseIconButton
           icon="pi pi-file-excel"
           :label="t('common.export')"
           size="small"
-          severity="success"
+          severity="secondary"
           outlined
           :loading="exporting"
           @click="onExport"
