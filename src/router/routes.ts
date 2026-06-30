@@ -7,15 +7,21 @@ import { checkpointsRoutes } from '@/modules/web/checkpoints/checkpoints.routes'
 import { reportsRoutes } from '@/modules/web/reports/reports.routes'
 import { rolesRoutes } from '@/modules/web/roles/roles.routes'
 import { routesRoutes } from '@/modules/web/routes/routes.routes'
+import { phoneRoutes } from '@/modules/mobile/phone/phone.routes'
+import { getDefaultPlatformRoute } from '@/services/platform/platform.service'
 
 export const routes = [
   ...authRoutes,
+  ...phoneRoutes,
   {
     path: '/',
     component: MainLayout,
-    meta: { requiresAuth: true },
     children: [
-      { path: '', redirect: '/dashboard' },
+      {
+        path: '',
+        // Keep root entry platform-aware without scattering checks across pages.
+        redirect: () => getDefaultPlatformRoute(),
+      },
       ...dashboardRoutes,
       ...usersRoutes,
       ...rolesRoutes,

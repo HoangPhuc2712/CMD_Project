@@ -18,20 +18,49 @@ const detailVisible = ref(false)
 const detailModel = ref<ReportFormModel | null>(null)
 
 const reportSwitchButtons = [
-  { label: 'Report List', icon: 'pi pi-file', size: 'small' as const, severity: 'info' as const, outlined: false, onClick: () => router.push({ name: 'reports' }) },
-  { label: 'Patrol Detail', icon: 'pi pi-list-check', size: 'small' as const, severity: 'secondary' as const, outlined: true, onClick: () => router.push({ name: 'patrol-detail-reports' }) },
+  {
+    label: 'Report List',
+    icon: 'pi pi-file',
+    size: 'small' as const,
+    severity: 'info' as const,
+    outlined: false,
+    onClick: () => router.push({ name: 'reports' }),
+  },
+  {
+    label: 'Patrol Detail',
+    icon: 'pi pi-list-check',
+    size: 'small' as const,
+    severity: 'secondary' as const,
+    outlined: true,
+    onClick: () => router.push({ name: 'patrol-detail-reports' }),
+  },
 ]
 
-function resultSeverity(value: string) { return value === 'OK' ? 'success' : 'danger' }
-function openDetail(row: ReportFormModel) { detailModel.value = row; detailVisible.value = true }
+function resultSeverity(value: string) {
+  return value === 'OK' ? 'success' : 'danger'
+}
+function openDetail(row: ReportFormModel) {
+  detailModel.value = row
+  detailVisible.value = true
+}
 async function onExport() {
   exporting.value = true
   try {
     const { exportPatrolReportXlsx } = await import('@/services/export/patrolReport.export')
-    await exportPatrolReportXlsx({ rows: await store.getRowsForExport(), fileName: `cmd_reports_${new Date().toISOString().slice(0, 10)}.xlsx` })
+    await exportPatrolReportXlsx({
+      rows: await store.getRowsForExport(),
+      fileName: `cmd_reports_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    })
   } catch (e: any) {
-    toast.add({ severity: 'error', summary: 'Error', detail: String(e?.message ?? 'Export failed.'), life: 2500 })
-  } finally { exporting.value = false }
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: String(e?.message ?? 'Export failed.'),
+      life: 2500,
+    })
+  } finally {
+    exporting.value = false
+  }
 }
 </script>
 
@@ -39,22 +68,62 @@ async function onExport() {
   <div class="space-y-4">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">Report List</h1>
-        <p class="text-sm text-slate-500">Draft CMD report table. Columns will be finalized after API is confirmed.</p>
+        <h1 class="text-[26px] font-semibold text-slate-900">Report List</h1>
+        <p class="text-sm text-slate-500">
+          Draft CMD report table. Columns will be finalized after API is confirmed.
+        </p>
       </div>
       <BaseButtonGroup :buttons="reportSwitchButtons" />
     </div>
-    <BaseDataTable v-model:modelSearch="store.searchText" title="Report List" :value="store.rows" data-key="id" :loading="store.loading" :paginator="true" :rows="25" @clear="store.clearFilters">
-      <template #toolbar-end><BaseIconButton icon="pi pi-file-excel" label="Export" iconClass="text-emerald-600" size="small" severity="secondary" outlined :loading="exporting" @click="onExport" /></template>
+    <BaseDataTable
+      v-model:modelSearch="store.searchText"
+      title="Report List"
+      :value="store.rows"
+      data-key="id"
+      :loading="store.loading"
+      :paginator="true"
+      :rows="25"
+      @clear="store.clearFilters"
+    >
+      <template #toolbar-end
+        ><BaseIconButton
+          icon="pi pi-file-excel"
+          label="Export"
+          iconClass="text-emerald-600"
+          size="small"
+          severity="secondary"
+          outlined
+          :loading="exporting"
+          @click="onExport"
+      /></template>
       <Column field="routeName" header="Route Name" />
       <Column field="checkpointName" header="Checkpoint" />
-      <Column field="inspectionResult" header="Result"><template #body="{ data }"><Tag :value="data.inspectionResult" :severity="resultSeverity(data.inspectionResult)" /></template></Column>
+      <Column field="inspectionResult" header="Result"
+        ><template #body="{ data }"
+          ><Tag
+            :value="data.inspectionResult"
+            :severity="resultSeverity(data.inspectionResult)" /></template
+      ></Column>
       <Column field="note" header="Note" />
       <Column field="reportAt" header="Report Date" />
       <Column field="processingStatus" header="Status" />
       <Column field="reportBy" header="Report By" />
-      <Column header="Action" :exportable="false"><template #body="{ data }"><BaseIconButton icon="pi pi-eye" size="small" severity="info" outlined rounded @click="openDetail(data)" /></template></Column>
+      <Column header="Action" :exportable="false"
+        ><template #body="{ data }"
+          ><BaseIconButton
+            icon="pi pi-eye"
+            size="small"
+            severity="info"
+            outlined
+            rounded
+            @click="openDetail(data)" /></template
+      ></Column>
     </BaseDataTable>
-    <ReportForm v-model:visible="detailVisible" mode="view" :model="detailModel" @close="detailModel = null" />
+    <ReportForm
+      v-model:visible="detailVisible"
+      mode="view"
+      :model="detailModel"
+      @close="detailModel = null"
+    />
   </div>
 </template>

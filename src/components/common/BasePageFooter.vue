@@ -7,7 +7,7 @@ const copyrightYearRange = computed(() => `${COPYRIGHT_START_YEAR}-${new Date().
 const JHV_LINK = 'https://www.jiahsin.com.vn/'
 const SHM_LINK = 'http://www.shimmer.com.vn/'
 const PORTAL_LINK = 'https://portal.jiahsin.com.vn/portal/'
-const APP_VERSION = '0.1.0'
+const APP_VERSION = '0.0.0'
 const { t } = useI18n()
 </script>
 
@@ -27,11 +27,29 @@ const { t } = useI18n()
     >
       <div class="flex flex-wrap items-center gap-1">
         <span>CMD Web Report ©{{ copyrightYearRange }}</span>
-        <a :href="JHV_LINK" target="_blank" rel="noopener noreferrer" class="font-semibold text-blue-600 hover:text-blue-700 hover:underline">JHV</a>
+        <a
+          :href="JHV_LINK"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+          >JHV</a
+        >
         <span>|</span>
-        <a :href="SHM_LINK" target="_blank" rel="noopener noreferrer" class="font-semibold text-blue-600 hover:text-blue-700 hover:underline">SHM</a>
+        <a
+          :href="SHM_LINK"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+          >SHM</a
+        >
         <span>|</span>
-        <a :href="PORTAL_LINK" target="_blank" rel="noopener noreferrer" class="font-semibold text-blue-600 hover:text-blue-700 hover:underline">Portal</a>
+        <a
+          :href="PORTAL_LINK"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+          >Portal</a
+        >
       </div>
 
       <div class="text-right text-slate-500">{{ t('footer.version') }} {{ APP_VERSION }}</div>
