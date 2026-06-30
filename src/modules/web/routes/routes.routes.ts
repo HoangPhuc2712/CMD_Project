@@ -1,7 +1,8 @@
 export const routesRoutes = [
   {
-    path: 'routes',
+    path: '/routes',
     name: 'routes',
-    component: () => import('@/modules/web/routes/pages/RouteList.vue'),
+    component: () => import('./pages/RouteList.vue'),
+    meta: { requiresAuth: true, permission: 'routes.manage' },
   },
 ]

@@ -7,6 +7,6 @@ export const reportsRoutes = [
   {
     path: 'patrol-detail-reports',
     name: 'patrol-detail-reports',
-    component: () => import('@/modules/web/reports/pages/PatrolDetailReportList.vue'),
+    component: () => import('@/modules/web/reports/pages/CmdDetailReportList.vue'),
   },
 ]

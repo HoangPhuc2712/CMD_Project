@@ -1,37 +1,491 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useToast } from 'primevue/usetoast'
+import { useI18n } from 'vue-i18n'
+
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
-import BaseDataTable from '@/components/common/BaseDataTable.vue'
-import { useAreasStore } from '@/modules/web/areas/areas.store'
-import { useI18n } from 'vue-i18n'
-import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
 
+import { useAreasStore } from '@/modules/web/areas/areas.store'
+import { useAuthStore } from '@/stores/auth.store'
+import type { AreaRow } from '@/modules/web/areas/areas.types'
+import { deleteAreaMock, fetchAreaById } from '@/modules/web/areas/areas.api'
+import { fetchCheckpointRows } from '@/modules/web/checkpoints/checkpoints.api'
+import type { CheckpointRow } from '@/modules/web/checkpoints/checkpoints.types'
+import type { CheckpointPrintItem } from '@/services/print/checkpointsPrint.types'
+
+import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
+import BaseDataTable from '@/components/common/BaseDataTable.vue'
+
+import AreaForm, {
+  type AreaFormMode,
+  type AreaFormModel,
+} from '@/modules/web/areas/components/AreaForm.vue'
+import BaseButton from '@/components/common/buttons/BaseButton.vue'
+import BaseConfirmDelete from '@/components/common/BaseConfirmDelete.vue'
+import AreaPrintOptionsDialog from '@/modules/web/areas/components/AreaPrintOptionsDialog.vue'
+import {
+  useDebouncedSearchDraft,
+  useResetFirstOnFilterChange,
+  resetFiltersWithSearchDraft,
+} from '@/composables/useFilters'
+import { usePagination } from '@/composables/usePagination'
+
+const router = useRouter()
+const toast = useToast()
 const store = useAreasStore()
-const { t } = useI18n()
+const auth = useAuthStore()
+const { t, locale } = useI18n()
+
+const canManage = computed(() => auth.isAdminUser && auth.canAccess('areas.manage'))
+const areaPrintOptions = computed(() =>
+  [...store.rows]
+    .sort((a, b) => Number(a.area_id ?? 0) - Number(b.area_id ?? 0))
+    .map((row) => ({
+      label: row.area_name || row.area_code || String(row.area_id),
+      value: row.area_id,
+    })),
+)
+const exporting = ref(false)
+const printOptionsVisible = ref(false)
+const printingAreaId = ref<number | null>(null)
+const DELETE_AREA_API_DRY_RUN = false
+
+const areaStatusOptions = computed(() => [
+  { label: t('areaList.areaStatusOptions.all'), value: 'ALL' },
+  { label: t('areaList.areaStatusOptions.active'), value: 'ACTIVE' },
+  {
+    label: t('areaList.areaStatusOptions.inactive'),
+    value: 'INACTIVE',
+  },
+])
+const confirmDeleteVisible = ref(false)
+const confirmDeleteMessage = ref('')
+const confirmDeleteLoading = ref(false)
+const pendingDeleteAction = ref<null | (() => Promise<void>)>(null)
+
+const { searchDraft } = useDebouncedSearchDraft({
+  source: () => store.searchText,
+  commit: (value) => {
+    store.searchText = value
+  },
+})
+
+useResetFirstOnFilterChange(
+  () => [store.searchText, store.filterStatus],
+  () => store.setFirst(0),
+)
+
+const { onPage } = usePagination({
+  load: () => store.load(),
+  setFirst: (first) => store.setFirst(first),
+  setPage: (first, rows) => store.setPage(first, rows),
+})
+
+onMounted(async () => {
+  await store.load()
+})
+
+function statusLabel(s: number) {
+  return s === 1 ? t('areaList.areaStatusOptions.active') : t('areaList.areaStatusOptions.inactive')
+}
+
+function statusSeverity(s: number) {
+  return s === 1 ? 'success' : 'secondary'
+}
+
+function onColumnFilter(payload: { key: string; value: any }) {
+  if (payload.key === 'status') store.filterStatus = payload.value ?? 'ALL'
+}
+
+function clearAll() {
+  resetFiltersWithSearchDraft({
+    clear: () => store.clearFilters(),
+    searchDraft,
+  })
+}
+
+async function onExport() {
+  exporting.value = true
+  try {
+    const { exportAreasXlsx } = await import('@/services/export/areas.export')
+
+    await exportAreasXlsx({
+      rows: await store.getRowsForExport(),
+      fileName: `areas_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    })
+  } catch (e: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: String(e?.message ?? t('areaList.errors.exportFailed')),
+      life: 3000,
+    })
+  } finally {
+    exporting.value = false
+  }
+}
+
+const selectedAreas = ref<AreaRow[] | null>(null)
+
+const formVisible = ref(false)
+const formMode = ref<AreaFormMode>('view')
+const formModel = ref<AreaFormModel | null>(null)
+const formSubmitting = ref(false)
+
+function mapRowToFormModel(row: AreaRow): AreaFormModel {
+  return {
+    area_id: row.area_id,
+    area_code: row.area_code,
+    area_name: row.area_name,
+  }
+}
+
+function goToAreaCheckPoints(row: AreaRow) {
+  router.push({
+    name: 'checkpoints',
+    query: {
+      areaId: row.area_id,
+      areaCode: row.area_code,
+    },
+  })
+}
+
+function openNew() {
+  formMode.value = 'new'
+  formModel.value = {
+    area_code: '',
+    area_name: '',
+  }
+  formVisible.value = true
+}
+
+async function openView(row: AreaRow) {
+  formMode.value = 'view'
+  const detail = (await fetchAreaById(row.area_id)) ?? row
+  formModel.value = mapRowToFormModel(detail as AreaRow)
+  formVisible.value = true
+}
+
+async function openEdit(row: AreaRow) {
+  formMode.value = 'edit'
+  const detail = (await fetchAreaById(row.area_id)) ?? row
+  formModel.value = mapRowToFormModel(detail as AreaRow)
+  formVisible.value = true
+}
+
+function getAreaDeleteBlockedCount(row: AreaRow) {
+  return Number(row.total_checkpoints ?? 0)
+}
+
+function logAreaDeleteDryRun(row: AreaRow) {
+  console.log('[DRY RUN] deleteArea skipped', {
+    payload: { area_id: row.area_id, actor_id: auth.user?.user_id ?? '' },
+    row,
+  })
+}
+
+async function doDeleteOne(row: AreaRow) {
+  if (DELETE_AREA_API_DRY_RUN) {
+    logAreaDeleteDryRun(row)
+    return
+  }
+
+  await deleteAreaMock({ area_id: row.area_id, actor_id: auth.user?.user_id ?? '' })
+}
+
+function openDeleteConfirm(message: string, action: () => Promise<void>) {
+  confirmDeleteMessage.value = message
+  pendingDeleteAction.value = action
+  confirmDeleteVisible.value = true
+}
+
+async function onConfirmDelete() {
+  if (!pendingDeleteAction.value || confirmDeleteLoading.value) return
+
+  confirmDeleteLoading.value = true
+  try {
+    await pendingDeleteAction.value()
+    confirmDeleteVisible.value = false
+    pendingDeleteAction.value = null
+  } finally {
+    confirmDeleteLoading.value = false
+  }
+}
+
+function closeDeleteConfirm() {
+  confirmDeleteVisible.value = false
+  confirmDeleteLoading.value = false
+  pendingDeleteAction.value = null
+}
+
+async function onDelete(row: AreaRow) {
+  const checkpointCount = getAreaDeleteBlockedCount(row)
+  if (checkpointCount > 0) {
+    toast.add({
+      severity: 'warn',
+      summary: t('common.cannotDelete'),
+      detail: `${t('areaList.errors.cannotDeleteSingleArea')} ${t('areaList.errors.becauseItHas')} ${checkpointCount} ${t('areaList.errors.checkpoints')}.`,
+      life: 3500,
+    })
+    return
+  }
+
+  openDeleteConfirm(
+    `${t('areaList.errors.areYouSure')} ${row.area_code} - ${row.area_name}?`,
+    async () => {
+      try {
+        await doDeleteOne(row)
+
+        if (DELETE_AREA_API_DRY_RUN) {
+          toast.add({
+            severity: 'info',
+            summary: 'Delete API Disabled',
+            detail: 'Delete API is disabled for testing. Check console log.',
+            life: 3000,
+          })
+          return
+        }
+
+        await store.load()
+        selectedAreas.value = null
+        toast.add({
+          severity: 'success',
+          summary: t('common.deleted'),
+          detail: t('areaList.success.deleteDetail'),
+          life: 2000,
+        })
+      } catch (e: any) {
+        const msg = String(e?.message ?? '')
+        if (msg.startsWith('AREA_HAS_SCAN_POINTS:')) {
+          const n = Number(msg.split(':')[1] ?? 0)
+          toast.add({
+            severity: 'warn',
+            summary: t('common.cannotDelete'),
+            detail: `${t('areaList.errors.cannotDeleteSingleArea')} ${row.area_code} ${t('areaList.errors.becauseItHas')} ${n} ${t('areaList.errors.checkpoints')}`,
+            life: 3500,
+          })
+          return
+        }
+        toast.add({
+          severity: 'error',
+          summary: t('common.error'),
+          detail: msg || t('areaList.errors.deleteFailed'),
+          life: 3000,
+        })
+        throw e
+      }
+    },
+  )
+}
+
+function onDeleteSelected() {
+  const sel = selectedAreas.value ?? []
+  if (!sel.length) return
+
+  const blocked = sel.filter((row) => getAreaDeleteBlockedCount(row) > 0)
+  if (blocked.length) {
+    toast.add({
+      severity: 'warn',
+      summary: t('common.cannotDelete'),
+      detail: `${t('areaList.errors.cannotDeleteMultipleAreas')} ${blocked.length} ${t('areaList.errors.becauseItContains')}.`,
+      life: 3500,
+    })
+    return
+  }
+
+  openDeleteConfirm(
+    `${t('areaList.errors.areYouSureMultiple')} ${sel.length} ${t('areaList.errors.selectedAreas')}?`,
+    async () => {
+      try {
+        for (const row of sel) {
+          await doDeleteOne(row)
+        }
+
+        if (DELETE_AREA_API_DRY_RUN) {
+          toast.add({
+            severity: 'info',
+            summary: 'Delete API Disabled',
+            detail: 'Delete API is disabled for testing. Check console log.',
+            life: 3000,
+          })
+          return
+        }
+
+        await store.load()
+        selectedAreas.value = null
+        toast.add({
+          severity: 'success',
+          summary: t('common.deleted'),
+          detail: t('areaList.success.DeleteMultipleDetail'),
+          life: 2000,
+        })
+      } catch (e: any) {
+        const msg = String(e?.message ?? '')
+        if (msg.startsWith('AREA_HAS_SCAN_POINTS:')) {
+          const n = Number(msg.split(':')[1] ?? 0)
+          toast.add({
+            severity: 'warn',
+            summary: t('common.cannotDelete'),
+            detail: `${t('areaList.errors.areaDeleteRestricted')} ${n} ${t('areaList.errors.checkpoints')}`,
+            life: 3500,
+          })
+          return
+        }
+        toast.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: msg || t('areaList.errors.deleteFailed'),
+          life: 3000,
+        })
+        throw e
+      }
+    },
+  )
+}
+
+function buildAreaPrintItems(row: AreaRow, checkpoints: CheckpointRow[]): CheckpointPrintItem[] {
+  return (checkpoints ?? [])
+    .filter((cp) => Number(cp.area_id) === Number(row.area_id))
+    .sort(
+      (a, b) =>
+        Number(a.cp_priority ?? 0) - Number(b.cp_priority ?? 0) ||
+        String(a.cp_code ?? '').localeCompare(String(b.cp_code ?? '')),
+    )
+    .map((cp) => ({
+      areaLabel: cp.area_code || cp.area_name || row.area_code || row.area_name,
+      cpName: cp.cp_name,
+      cpCode: cp.cp_code,
+      cpPriority: cp.cp_priority,
+      qrSrc: cp.cp_qr,
+    }))
+}
+
+async function onPrintAreaQr(row: AreaRow) {
+  printingAreaId.value = row.area_id
+  try {
+    const checkpoints = (await fetchCheckpointRows([], { page: 1, pageSize: 100000 })).items
+    const items = buildAreaPrintItems(row, checkpoints)
+
+    if (!items.length) {
+      toast.add({
+        severity: 'warn',
+        summary: t('areaList.errors.noQr'),
+        detail: `${t('areaList.errors.noQrDetail')} ${row.area_code}.`,
+        life: 3000,
+      })
+      return
+    }
+
+    const { printCheckpointQrSheets } = await import('@/services/print/checkpoints.print')
+
+    await printCheckpointQrSheets(items, `${row.area_code || row.area_name} Qr Codes`)
+  } catch (e: any) {
+    const msg = String(e?.message ?? '')
+    toast.add({
+      severity: 'error',
+      summary: t('areaList.errors.qrPdfError'),
+      detail:
+        msg === 'QR_IMAGE_NOT_FOUND'
+          ? t('areaList.errors.noQrAvailable')
+          : msg === 'QR_IMAGE_FORMAT_NOT_SUPPORTED'
+            ? t('areaList.errors.qrUnsupport')
+            : msg || t('areaList.errors.qrExportFailed'),
+      life: 3500,
+    })
+  } finally {
+    printingAreaId.value = null
+  }
+}
+
+async function handleAreaFormSubmit(payload: { submit: (actor_id: string) => Promise<void> }) {
+  if (formSubmitting.value) return
+
+  const actor = auth.user?.user_id ?? ''
+  if (!actor) return
+
+  formSubmitting.value = true
+
+  try {
+    await payload.submit(actor)
+    await store.load()
+
+    formVisible.value = false
+    formModel.value = null
+    selectedAreas.value = null
+
+    toast.add({
+      severity: 'success',
+      summary: t('common.save'),
+      detail: t('areaList.success.savedDetail'),
+      life: 2000,
+    })
+  } catch (e: any) {
+    const msg = String(e?.message ?? '')
+
+    if (msg.startsWith('MISSING_FIELDS:')) {
+      const fields = msg.replace('MISSING_FIELDS:', '').trim()
+      toast.add({
+        severity: 'warn',
+        summary: 'Validation',
+        detail: fields ? `Please fill: ${fields}.` : 'Please fill required fields.',
+        life: 3200,
+      })
+      return
+    }
+
+    if (msg === 'AREA_CODE_EXISTS') {
+      toast.add({
+        severity: 'warn',
+        summary: t('areaList.errors.duplicate'),
+        detail: t('areaList.errors.areaCodeExist'),
+        life: 3000,
+      })
+      return
+    }
+
+    toast.add({
+      severity: 'error',
+      summary: t('common.error'),
+      detail: msg || t('areaList.errors.saveAreaFailed'),
+      life: 3500,
+    })
+  } finally {
+    formSubmitting.value = false
+  }
+}
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div>
-      <h1 class="text-2xl font-bold text-slate-900">{{ t('areas.title') }}</h1>
-    </div>
+  <div class="space-y-3">
+    <div class="text-[26px] font-semibold text-slate-800">{{ t('areaList.title') }}</div>
+
     <BaseDataTable
-      v-model:modelSearch="store.searchText"
-      :title="t('areas.title')"
-      :value="store.rows"
-      data-key="id"
+      :key="`area-list-table-${locale}`"
+      title="Areas"
+      :value="store.filteredRows"
       :loading="store.loading"
-      :paginator="true"
-      :rows="25"
-      @clear="store.clearFilters"
+      dataKey="area_id"
+      v-model:selection="selectedAreas"
+      :rows="store.rowsPerPage"
+      :first="store.first"
+      lazy
+      :totalRecords="store.totalRecords"
+      :modelSearch="searchDraft"
+      @update:modelSearch="searchDraft = $event"
+      @update:columnFilter="onColumnFilter"
+      @clear="clearAll"
+      @page="onPage"
     >
-      <template #toolbar-start>
+      <template v-if="canManage" #toolbar-start>
         <BaseIconButton
           icon="pi pi-plus"
-          :label="t('common.add')"
+          :label="t('common.new')"
           size="small"
           severity="success"
-          @click="$router.push({ name: 'AreaCreate' })"
+          :disabled="!canManage"
+          @click="openNew"
         />
         <BaseIconButton
           icon="pi pi-trash"
@@ -39,18 +493,132 @@ const { t } = useI18n()
           size="small"
           severity="danger"
           outlined
-          @click="$router.push({ name: 'AreaDelete' })"
+          :disabled="!canManage || !(selectedAreas && selectedAreas.length)"
+          @click="onDeleteSelected"
         />
       </template>
-      <Column selection-mode="multiple" style="width: 3em" />
-      <Column field="code" :header="t('areas.columns.code')" />
-      <Column field="name" :header="t('areas.columns.name')" />
-      <Column field="factory" :header="t('areas.columns.factory')" />
-      <Column field="status" :header="t('common.status')">
+
+      <template #toolbar-end>
+        <div class="flex justify-end gap-2">
+          <BaseIconButton
+            v-if="canManage"
+            icon="pi pi-file-pdf"
+            :label="t('areaList.checkpointExportPdf')"
+            iconClass="text-rose-600"
+            size="small"
+            severity="secondary"
+            outlined
+            @click="printOptionsVisible = true"
+          />
+          <BaseIconButton
+            icon="pi pi-file-excel"
+            :label="t('common.export')"
+            iconClass="text-emerald-600"
+            size="small"
+            severity="secondary"
+            outlined
+            :loading="exporting"
+            :disabled="exporting"
+            @click="onExport"
+          />
+        </div>
+      </template>
+
+      <Column
+        v-if="canManage"
+        selectionMode="multiple"
+        style="width: 3rem"
+        :exportable="false"
+        sortDisabled
+      />
+
+      <Column field="area_code" :header="t('areaList.areaCode')" sortDisabled />
+      <Column field="area_name" :header="t('areaList.areaName')" sortDisabled />
+
+      <Column :header="t('areaList.areaCheckPoints')" sortDisabled>
         <template #body="{ data }">
-          <Tag :value="data.status" :severity="data.status === 'Active' ? 'success' : 'danger'" />
+          <BaseButton
+            :label="`${t('common.view')} (${data.total_checkpoints ?? 0})`"
+            severity="secondary"
+            outlined
+            @click="goToAreaCheckPoints(data)"
+          />
+        </template>
+      </Column>
+
+      <Column :header="t('areaList.status')" sortDisabled>
+        <template #body="{ data }">
+          <Tag
+            :value="statusLabel(data.area_status)"
+            :severity="statusSeverity(data.area_status)"
+          />
+        </template>
+      </Column>
+
+      <Column :header="t('common.action')" :exportable="false" sortDisabled>
+        <template #body="{ data }">
+          <div class="flex gap-2 justify-start">
+            <BaseIconButton
+              icon="pi pi-eye"
+              size="small"
+              severity="info"
+              outlined
+              rounded
+              @click="openView(data)"
+            />
+            <BaseIconButton
+              v-if="canManage"
+              icon="pi pi-file-pdf"
+              size="small"
+              severity="secondary"
+              outlined
+              rounded
+              ariaLabel="Export Qr PDF"
+              :loading="printingAreaId === data.area_id"
+              :disabled="printingAreaId === data.area_id"
+              @click="onPrintAreaQr(data)"
+            />
+            <BaseIconButton
+              v-if="canManage"
+              icon="pi pi-pencil"
+              size="small"
+              severity="secondary"
+              outlined
+              rounded
+              @click="openEdit(data)"
+            />
+            <BaseIconButton
+              v-if="canManage"
+              icon="pi pi-trash"
+              size="small"
+              severity="danger"
+              outlined
+              rounded
+              @click="onDelete(data)"
+            />
+          </div>
         </template>
       </Column>
     </BaseDataTable>
+
+    <BaseConfirmDelete
+      :visible="confirmDeleteVisible"
+      :message="confirmDeleteMessage"
+      :loading="confirmDeleteLoading"
+      @update:visible="confirmDeleteVisible = $event"
+      @cancel="closeDeleteConfirm"
+      @confirm="onConfirmDelete"
+    />
+
+    <AreaForm
+      v-model:visible="formVisible"
+      :mode="formMode"
+      :model="formModel"
+      :loading="formSubmitting"
+      @submit="handleAreaFormSubmit"
+      @close="formModel = null"
+    />
+
+    <AreaPrintOptionsDialog v-model:visible="printOptionsVisible" :areaOptions="areaPrintOptions" />
   </div>
 </template>

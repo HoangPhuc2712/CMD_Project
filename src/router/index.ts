@@ -14,13 +14,19 @@ async function clearPageFiltersByRouteName(routeName: string | symbol | null | u
       useAreasStore().clearFilters()
       break
     }
+    case 'checkpoints': {
+      const { useCheckpointsStore } = await import('@/modules/web/checkpoints/checkpoints.store')
+      useCheckpointsStore().clearFilters()
+      break
+    }
     case 'reports': {
       const { useReportsStore } = await import('@/modules/web/reports/reports.store')
       useReportsStore().clearFilters()
       break
     }
     case 'patrol-detail-reports': {
-      const { usePatrolDetailReportsStore } = await import('@/modules/web/reports/patrolDetailReports.store')
+      const { usePatrolDetailReportsStore } =
+        await import('@/modules/web/reports/cmdDetailReports.store')
       usePatrolDetailReportsStore().clearFilters()
       break
     }

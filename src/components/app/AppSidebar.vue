@@ -53,6 +53,9 @@ function itemClass(active: boolean) {
 }
 
 function isActivePath(prefix: string) {
+  if (prefix === '/areas') {
+    return route.path === '/areas' || route.path.startsWith('/areas/') || route.path === '/checkpoints'
+  }
   if (prefix === '/reports') {
     return route.path === '/reports' || route.path.startsWith('/reports/') || route.path === '/patrol-detail-reports'
   }

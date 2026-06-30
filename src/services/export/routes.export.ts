@@ -1,0 +1,99 @@
+import type ExcelJS from 'exceljs'
+import { createExcelWorkbook } from './excelWorkbook'
+import type { RouteRow } from '@/modules/web/routes/routes.types'
+import { translateRoleName, translateRouteName } from '@/utils/dataI18n'
+import { excelT } from './exportI18n'
+
+function applyBorder(cell: ExcelJS.Cell) {
+  cell.border = {
+    top: { style: 'thin' },
+    left: { style: 'thin' },
+    bottom: { style: 'thin' },
+    right: { style: 'thin' },
+  }
+}
+
+function buildRouteDetailText(row: RouteRow) {
+  const parts = (row.details ?? [])
+    .map((detail) => String(detail.cp_priority ?? '').trim())
+    .filter(Boolean)
+
+  return parts.length ? parts.join(' -> ') : '-'
+}
+
+function formatMinuteClock(value: number | null | undefined) {
+  const minute = Number(value ?? 0)
+  if (!Number.isFinite(minute)) return '-'
+  return `${Math.max(0, Math.trunc(minute))}:00`
+}
+
+async function saveWorkbook(wb: ExcelJS.Workbook, fileName: string) {
+  const buf = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export async function exportRoutesXlsx(params: { rows: RouteRow[]; fileName: string }) {
+  const wb = await createExcelWorkbook()
+  const ws = wb.addWorksheet(excelT('breadcrumb.routes', 'Patrol Routes'))
+
+  ws.columns = [
+    { header: excelT('routeList.routeCode', 'Route Code'), key: 'route_code', width: 18 },
+    { header: excelT('routeList.routeName', 'Route Name'), key: 'route_name', width: 20 },
+    { header: excelT('routeList.area', 'Area'), key: 'area_name', width: 20 },
+    { header: excelT('routeList.role', 'Role'), key: 'role_name', width: 20 },
+    { header: excelT('routeList.priority', 'Priority'), key: 'route_priority', width: 12 },
+    { header: excelT('routeList.minMinute', 'Minimum Time'), key: 'route_min_minute', width: 16 },
+    { header: excelT('routeList.maxMinute', 'Maximum Time'), key: 'route_max_minute', width: 16 },
+    { header: excelT('routeList.routeDetail', 'Route Detail'), key: 'route_detail', width: 32 },
+  ]
+
+  for (let c = 1; c <= 8; c++) {
+    const cell = ws.getCell(1, c)
+    cell.font = { bold: true, color: { argb: 'FF0F172A' } }
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
+    applyBorder(cell)
+  }
+
+  for (const row of params.rows ?? []) {
+    ws.addRow({
+      route_code: row.route_code || '-',
+      route_name: row.route_name
+        ? translateRouteName(row.route_name, (key) => excelT(key, row.route_name))
+        : '-',
+      area_name: row.area_name || '-',
+      role_name: row.role_name
+        ? translateRoleName(row.role_name, (key) => excelT(key, row.role_name))
+        : row.role_code || '-',
+      route_priority: Number(row.route_priority ?? 0),
+      route_max_minute: formatMinuteClock(row.route_max_minute),
+      route_min_minute: formatMinuteClock(row.route_min_minute),
+      route_detail: buildRouteDetailText(row),
+    })
+  }
+
+  ws.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return
+    row.height = 60
+    row.eachCell((cell, colNumber) => {
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: colNumber === 5 ? 'center' : 'left',
+        wrapText: true,
+      }
+      applyBorder(cell)
+    })
+  })
+
+  ws.views = [{ state: 'frozen', ySplit: 1 }]
+  await saveWorkbook(wb, params.fileName)
+}

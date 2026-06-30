@@ -3,6 +3,7 @@ import MainLayout from '@/layouts/MainLayout.vue'
 import { dashboardRoutes } from '@/modules/web/dashboard/dashboard.routes'
 import { usersRoutes } from '@/modules/web/users/users.routes'
 import { areasRoutes } from '@/modules/web/areas/areas.routes'
+import { checkpointsRoutes } from '@/modules/web/checkpoints/checkpoints.routes'
 import { reportsRoutes } from '@/modules/web/reports/reports.routes'
 import { rolesRoutes } from '@/modules/web/roles/roles.routes'
 import { routesRoutes } from '@/modules/web/routes/routes.routes'
@@ -19,6 +20,7 @@ export const routes = [
       ...usersRoutes,
       ...rolesRoutes,
       ...areasRoutes,
+      ...checkpointsRoutes,
       ...routesRoutes,
       ...reportsRoutes,
       {

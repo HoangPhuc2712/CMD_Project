@@ -1,7 +1,8 @@
 export const areasRoutes = [
   {
-    path: 'areas',
+    path: '/areas',
     name: 'areas',
-    component: () => import('@/modules/web/areas/pages/AreaList.vue'),
+    component: () => import('./pages/AreaList.vue'),
+    meta: { requiresAuth: true, permission: 'areas.manage' },
   },
 ]

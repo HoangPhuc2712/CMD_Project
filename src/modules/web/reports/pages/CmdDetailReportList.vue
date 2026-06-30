@@ -8,7 +8,7 @@ import { useI18n } from 'vue-i18n'
 import BaseDataTable from '@/components/common/BaseDataTable.vue'
 import BaseButtonGroup from '@/components/common/buttons/BaseButtonGroup.vue'
 import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
-import { usePatrolDetailReportsStore } from '@/modules/web/reports/patrolDetailReports.store'
+import { usePatrolDetailReportsStore } from '@/modules/web/reports/cmdDetailReports.store'
 
 const store = usePatrolDetailReportsStore()
 const toast = useToast()
@@ -92,6 +92,7 @@ async function onExport() {
         <BaseIconButton
           icon="pi pi-file-excel"
           :label="t('common.export')"
+          iconClass="text-emerald-600"
           size="small"
           severity="secondary"
           outlined

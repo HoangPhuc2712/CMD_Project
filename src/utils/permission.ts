@@ -3,6 +3,7 @@ export type PermissionKey =
   | 'users.manage'
   | 'roles.manage'
   | 'areas.manage'
+  | 'checkpoints.manage'
   | 'routes.manage'
   | 'reports.view'
 
@@ -11,6 +12,7 @@ export const ALL_PERMISSION_KEYS: PermissionKey[] = [
   'users.manage',
   'roles.manage',
   'areas.manage',
+  'checkpoints.manage',
   'routes.manage',
   'reports.view',
 ]

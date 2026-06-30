@@ -1,7 +1,8 @@
 export const rolesRoutes = [
   {
-    path: 'roles',
+    path: '/roles',
     name: 'roles',
-    component: () => import('@/modules/web/roles/pages/RoleList.vue'),
+    component: () => import('./pages/RoleList.vue'),
+    meta: { requiresAuth: true, permission: 'roles.manage' },
   },
 ]

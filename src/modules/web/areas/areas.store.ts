@@ -1,24 +1,73 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
-import { cmdAreas } from '@/mocks/cmdData'
+import { fetchAllPagedRows, toApiPage } from '@/utils/pagination'
+import type { AreaRow, AreaStatusFilter } from './areas.types'
+import { fetchAreaRowsPaged } from './areas.api'
 
-export const useAreasStore = defineStore('areas', () => {
-  const searchText = ref('')
-  const loading = ref(false)
+function filterAreaRows(rows: AreaRow[], searchText: string, filterStatus: AreaStatusFilter) {
+  const q = searchText.trim().toLowerCase()
 
-  const rows = computed(() => {
-    const q = searchText.value.trim().toLowerCase()
-    if (!q) return cmdAreas
-    return cmdAreas.filter((row) =>
-      [row.code, row.name, row.factory, row.status].some((value) =>
-        String(value).toLowerCase().includes(q),
-      ),
-    )
+  return rows.filter((r) => {
+    if (q && (!r._q || !r._q.includes(q))) return false
+
+    if (filterStatus === 'ACTIVE' && r.area_status !== 1) return false
+    if (filterStatus === 'INACTIVE' && r.area_status !== 0) return false
+
+    return true
   })
+}
 
-  function clearFilters() {
-    searchText.value = ''
-  }
+export const useAreasStore = defineStore('areas', {
+  state: () => ({
+    rows: [] as AreaRow[],
+    loading: false,
 
-  return { searchText, loading, rows, clearFilters }
+    searchText: '' as string,
+    filterStatus: 'ALL' as AreaStatusFilter,
+
+    first: 0,
+    rowsPerPage: 25,
+    totalRecords: 0,
+  }),
+
+  getters: {
+    filteredRows(state): AreaRow[] {
+      return filterAreaRows(state.rows, state.searchText, state.filterStatus)
+    },
+  },
+
+  actions: {
+    async load() {
+      this.loading = true
+      try {
+        const result = await fetchAreaRowsPaged({
+          page: toApiPage(this.first, this.rowsPerPage),
+          pageSize: this.rowsPerPage,
+        })
+        this.rows = result.items
+        this.totalRecords = result.totalCount
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async getRowsForExport() {
+      const rows = await fetchAllPagedRows((pageParams) => fetchAreaRowsPaged(pageParams))
+      return filterAreaRows(rows, this.searchText, this.filterStatus)
+    },
+
+    clearFilters() {
+      this.searchText = ''
+      this.filterStatus = 'ALL'
+      this.first = 0
+    },
+
+    setFirst(first: number) {
+      this.first = first
+    },
+
+    setPage(first: number, rowsPerPage: number) {
+      this.first = first
+      this.rowsPerPage = rowsPerPage
+    },
+  },
 })

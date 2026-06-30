@@ -1,12 +1,14 @@
 export const usersRoutes = [
   {
-    path: 'users',
+    path: '/users',
     name: 'users',
-    component: () => import('@/modules/web/users/pages/UserList.vue'),
+    component: () => import('./pages/UserList.vue'),
+    meta: { requiresAuth: true, permission: 'users.manage' },
   },
   {
-    path: 'user-info',
+    path: '/user-info',
     name: 'user-info',
-    component: () => import('@/modules/web/users/pages/UserInfo.vue'),
+    component: () => import('./pages/UserInfo.vue'),
+    meta: { requiresAuth: true },
   },
 ]

@@ -1,54 +1,511 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
-import BaseDataTable from '@/components/common/BaseDataTable.vue'
-import { useRolesStore } from '@/modules/web/roles/roles.store'
+import { useToast } from 'primevue/usetoast'
 import { useI18n } from 'vue-i18n'
 
+import BaseDataTable from '@/components/common/BaseDataTable.vue'
+import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
+import BaseConfirmDelete from '@/components/common/BaseConfirmDelete.vue'
+
+import { useRolesStore } from '@/modules/web/roles/roles.store'
+import { useAuthStore } from '@/stores/auth.store'
+import type { RoleRow } from '@/modules/web/roles/roles.types'
+import { deleteRole, fetchRoleById } from '@/modules/web/roles/roles.api'
+import { fetchUserRows } from '@/modules/web/users/users.api'
+import { translateMenuCategoryName, translateRoleName } from '@/utils/dataI18n'
+
+import {
+  useDebouncedSearchDraft,
+  useResetFirstOnFilterChange,
+  resetFiltersWithSearchDraft,
+} from '@/composables/useFilters'
+import { usePagination } from '@/composables/usePagination'
+
+import RoleForm, {
+  type RoleFormModel,
+  type RoleFormMode,
+  type RoleFormSubmitPayload,
+} from '../components/RoleForm.vue'
+
+const toast = useToast()
 const store = useRolesStore()
-const { t } = useI18n()
+const auth = useAuthStore()
+const { t, locale } = useI18n()
+
+const canManage = computed(() => auth.isAdminUser && auth.canAccess('roles.manage'))
+const exporting = ref(false)
+
+const translatedMenuOptions = computed(() =>
+  (store.menuOptions ?? []).map((option) => ({
+    ...option,
+    label: translateMenuCategoryName(String(option.label ?? ''), t),
+  })),
+)
+
+const roleStatusOptions = computed(() => [
+  { label: t('roleList.roleStatusOptions.all'), value: 'ALL' },
+  { label: t('roleList.roleStatusOptions.active'), value: 'ACTIVE' },
+  {
+    label: t('roleList.roleStatusOptions.inactive'),
+    value: 'INACTIVE',
+  },
+])
+const confirmDeleteVisible = ref(false)
+const confirmDeleteMessage = ref('')
+const confirmDeleteLoading = ref(false)
+const pendingDeleteAction = ref<null | (() => Promise<void>)>(null)
+
+const { searchDraft } = useDebouncedSearchDraft({
+  source: () => store.searchText,
+  commit: (value) => {
+    store.searchText = value
+  },
+})
+
+useResetFirstOnFilterChange(
+  () => [store.searchText, store.filterStatus],
+  () => store.setFirst(0),
+)
+
+const { onPage } = usePagination({
+  load: () => store.load(),
+  setFirst: (first) => store.setFirst(first),
+  setPage: (first, rows) => store.setPage(first, rows),
+})
+
+onMounted(async () => {
+  await store.load()
+})
+
+function statusLabel(s: number) {
+  return s === 1 ? t('roleList.roleStatusOptions.active') : t('roleList.roleStatusOptions.inactive')
+}
+
+function displayRoleName(roleName: string) {
+  return translateRoleName(String(roleName ?? ''), t)
+}
+function statusSeverity(s: number) {
+  return s === 1 ? 'success' : 'secondary'
+}
+
+const selectedRoles = ref<RoleRow[] | null>(null)
+
+const formVisible = ref(false)
+const formMode = ref<RoleFormMode>('view')
+const formModel = ref<RoleFormModel | null>(null)
+const formSubmitting = ref(false)
+
+function mapRowToFormModel(row: RoleRow): RoleFormModel {
+  return {
+    role_id: row.role_id,
+    role_code: row.role_code,
+    role_name: row.role_name,
+    role_hour_report: Boolean(row.role_hour_report),
+    role_is_admin: Boolean(row.role_is_admin),
+    mc_ids: Array.isArray(row.menu_ids) ? [...row.menu_ids] : [],
+    menu_names: Array.isArray(row.menu_names) ? [...row.menu_names] : [],
+  }
+}
+
+function openNew() {
+  formMode.value = 'new'
+  formModel.value = {
+    role_code: '',
+    role_name: '',
+    role_hour_report: false,
+    role_is_admin: false,
+    mc_ids: [],
+    menu_names: [],
+  }
+  formVisible.value = true
+}
+
+async function openView(row: RoleRow) {
+  formMode.value = 'view'
+  const detail = (await fetchRoleById(row.role_id)) ?? row
+  formModel.value = mapRowToFormModel(detail as RoleRow)
+  formVisible.value = true
+}
+
+async function openEdit(row: RoleRow) {
+  formMode.value = 'edit'
+  const detail = (await fetchRoleById(row.role_id)) ?? row
+  formModel.value = mapRowToFormModel(detail as RoleRow)
+  formVisible.value = true
+}
+
+async function getAssignedUserCounts(roleIds: number[]) {
+  const users = (await fetchUserRows({ page: 1, pageSize: 100000 })).items
+  const counts = new Map<number, number>()
+
+  for (const user of users) {
+    const roleId = Number(user.user_role_id ?? 0)
+    if (!roleIds.includes(roleId)) continue
+    counts.set(roleId, (counts.get(roleId) ?? 0) + 1)
+  }
+
+  return counts
+}
+
+function openDeleteConfirm(message: string, action: () => Promise<void>) {
+  confirmDeleteMessage.value = message
+  pendingDeleteAction.value = action
+  confirmDeleteVisible.value = true
+}
+
+async function onConfirmDelete() {
+  if (!pendingDeleteAction.value || confirmDeleteLoading.value) return
+
+  confirmDeleteLoading.value = true
+  try {
+    await pendingDeleteAction.value()
+    confirmDeleteVisible.value = false
+    pendingDeleteAction.value = null
+  } finally {
+    confirmDeleteLoading.value = false
+  }
+}
+
+function closeDeleteConfirm() {
+  confirmDeleteVisible.value = false
+  confirmDeleteLoading.value = false
+  pendingDeleteAction.value = null
+}
+
+async function onDelete(row: RoleRow) {
+  try {
+    const counts = await getAssignedUserCounts([row.role_id])
+    const assignedCount = counts.get(row.role_id) ?? 0
+
+    if (assignedCount > 0) {
+      toast.add({
+        severity: 'warn',
+        summary: t('roleList.error.deleteRestricted'),
+        detail: `${t('roleList.error.deleteDetail')} ${assignedCount} ${t('roleList.error.user')}.`,
+        life: 3500,
+      })
+      return
+    }
+
+    openDeleteConfirm(
+      `${t('roleList.error.areYouSure')} ${displayRoleName(row.role_name)}?`,
+      async () => {
+        try {
+          await deleteRole({ role_id: row.role_id, actor_id: auth.user?.user_id ?? '' })
+          await store.load()
+          selectedRoles.value = null
+          toast.add({
+            severity: 'success',
+            summary: t('common.deleted'),
+            detail: t('roleList.success.deleteDetail'),
+            life: 2000,
+          })
+        } catch (e: any) {
+          toast.add({
+            severity: 'error',
+            summary: t('common.error'),
+            detail: e?.message ?? t('roleList.error.deleteFailed'),
+            life: 3000,
+          })
+          throw e
+        }
+      },
+    )
+  } catch (e: any) {
+    toast.add({
+      severity: 'error',
+      summary: t('common.error'),
+      detail: e?.message ?? t('roleList.error.validate'),
+      life: 3000,
+    })
+  }
+}
+
+async function confirmDeleteSelected() {
+  const items = selectedRoles.value ?? []
+  if (!items.length) return
+
+  try {
+    const roleIds = items.map((r) => r.role_id)
+    const counts = await getAssignedUserCounts(roleIds)
+
+    const blocked = items.filter((r) => (counts.get(r.role_id) ?? 0) > 0)
+    if (blocked.length > 0) {
+      const totalAssigned = blocked.reduce((sum, r) => sum + (counts.get(r.role_id) ?? 0), 0)
+      const firstBlocked = blocked[0]
+
+      toast.add({
+        severity: 'warn',
+        summary: t('roleList.error.deleteRestricted'),
+        detail:
+          blocked.length === 1 && firstBlocked
+            ? `${t('roleList.error.DeleteDetailMultipleFirst')} "${displayRoleName(firstBlocked.role_name)}" ${t('roleList.error.assignedFirst')} ${counts.get(firstBlocked.role_id) ?? 0} ${t('roleList.error.user')}.`
+            : `${t('roleList.error.DeleteDetailMultipleSecond')} ${blocked.length} ${t('roleList.error.assignedSecond')} ${totalAssigned} ${t('roleList.error.user')}).`,
+        life: 4000,
+      })
+      return
+    }
+
+    openDeleteConfirm(
+      `${t('roleList.error.areYouSureMultiple')} ${items.length} ${t('roleList.error.multipleRoles')}?`,
+      async () => {
+        try {
+          const actor = auth.user?.user_id ?? ''
+
+          for (const r of items) {
+            await deleteRole({ role_id: r.role_id, actor_id: actor })
+          }
+
+          await store.load()
+          selectedRoles.value = null
+          toast.add({
+            severity: 'success',
+            summary: t('common.deleted'),
+            detail: t('roleList.success.deleteDetailMultiple'),
+            life: 2000,
+          })
+        } catch (e: any) {
+          toast.add({
+            severity: 'error',
+            summary: t('common.error'),
+            detail: e?.message ?? t('roleList.error.deleteFailedMultiple'),
+            life: 3000,
+          })
+          throw e
+        }
+      },
+    )
+  } catch (e: any) {
+    toast.add({
+      severity: 'error',
+      summary: t('common.error'),
+      detail: e?.message ?? t('roleList.error.validate'),
+      life: 3000,
+    })
+  }
+}
+
+function onColumnFilter(payload: { key: string; value: any }) {
+  if (payload.key === 'status') store.filterStatus = payload.value ?? 'ALL'
+}
+
+async function ensurePermissionOptionsLoaded() {
+  await store.ensureMenuOptionsLoaded()
+}
+
+function clearAll() {
+  resetFiltersWithSearchDraft({
+    clear: () => store.clearFilters(),
+    searchDraft,
+    afterClear: () => {
+      selectedRoles.value = null
+    },
+  })
+}
+
+async function onExport() {
+  exporting.value = true
+  try {
+    const { exportRolesXlsx } = await import('@/services/export/roles.export')
+
+    await exportRolesXlsx({
+      rows: await store.getRowsForExport(),
+      fileName: `roles_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    })
+  } catch (e: any) {
+    toast.add({
+      severity: 'error',
+      summary: t('common.error'),
+      detail: String(e?.message ?? 'Failed to export roles.'),
+      life: 3000,
+    })
+  } finally {
+    exporting.value = false
+  }
+}
+
+async function handleSubmit(payload: RoleFormSubmitPayload) {
+  if (formSubmitting.value) return
+
+  formSubmitting.value = true
+
+  try {
+    const actor = auth.user?.user_id ?? ''
+    await payload.submit(actor)
+    await store.load()
+    selectedRoles.value = null
+    formVisible.value = false
+
+    toast.add({
+      severity: 'success',
+      summary: t('common.save'),
+      detail:
+        formMode.value === 'new'
+          ? t('roleList.success.roleCreated')
+          : t('roleList.success.roleEdited'),
+      life: 2000,
+    })
+  } catch (e: any) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: e?.message ?? t('roleList.error.saveFailed'),
+      life: 3000,
+    })
+  } finally {
+    formSubmitting.value = false
+  }
+}
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div>
-      <h1 class="text-2xl font-bold text-slate-900">{{ t('roles.title') }}</h1>
-    </div>
+  <div class="space-y-3">
+    <div class="text-[26px] font-semibold text-slate-800">{{ t('roleList.title') }}</div>
+
     <BaseDataTable
-      v-model:modelSearch="store.searchText"
-      :title="t('roles.title')"
-      :value="store.rows"
-      data-key="id"
+      :key="`role-list-table-${locale}`"
+      title="Roles"
+      :value="store.filteredRows"
       :loading="store.loading"
-      :paginator="true"
-      :rows="25"
-      @clear="store.clearFilters"
+      dataKey="role_id"
+      v-model:selection="selectedRoles"
+      :rows="store.rowsPerPage"
+      :first="store.first"
+      lazy
+      :totalRecords="store.totalRecords"
+      :modelSearch="searchDraft"
+      @update:modelSearch="searchDraft = $event"
+      @update:columnFilter="onColumnFilter"
+      @clear="clearAll"
+      @page="onPage"
     >
-      <template #toolbar-start>
+      <template v-if="canManage" #toolbar-start>
+        <div class="flex gap-2">
+          <BaseIconButton
+            icon="pi pi-plus"
+            :label="t('common.new')"
+            size="small"
+            severity="success"
+            :disabled="!canManage"
+            @click="openNew"
+          />
+          <BaseIconButton
+            icon="pi pi-trash"
+            :label="t('common.delete')"
+            size="small"
+            severity="danger"
+            outlined
+            :disabled="!canManage || !selectedRoles || selectedRoles.length === 0"
+            @click="confirmDeleteSelected"
+          />
+        </div>
+      </template>
+
+      <template #toolbar-end>
         <BaseIconButton
-          icon="pi pi-plus"
-          :label="t('common.add')"
+          icon="pi pi-file-excel"
+          :label="t('common.export')"
+          iconClass="text-emerald-600"
           size="small"
-          severity="success"
-          @click="$router.push({ name: 'RoleCreate' })"
-        />
-        <BaseIconButton
-          icon="pi pi-trash"
-          :label="t('common.delete')"
-          size="small"
-          severity="danger"
+          severity="secondary"
           outlined
-          @click="$router.push({ name: 'RoleDelete' })"
+          :loading="exporting"
+          :disabled="exporting"
+          @click="onExport"
         />
       </template>
-      <Column selection-mode="multiple" style="width: 3em" />
-      <Column field="code" :header="t('roles.columns.code')" />
-      <Column field="name" :header="t('roles.columns.name')" />
-      <Column field="status" :header="t('common.status')">
+
+      <Column
+        v-if="canManage"
+        selectionMode="multiple"
+        style="width: 3rem"
+        :exportable="false"
+        sortDisabled
+      />
+
+      <Column field="role_code" :header="t('roleList.roleCode')" style="min-width: 10rem" />
+      <Column field="role_name" :header="t('roleList.roleName')" style="min-width: 14rem">
         <template #body="{ data }">
-          <Tag :value="data.status" :severity="data.status === 'Active' ? 'success' : 'danger'" />
+          <div class="text-slate-800">{{ displayRoleName(data.role_name) }}</div>
+        </template>
+      </Column>
+
+      <Column
+        :header="t('roleList.accessPermission')"
+        style="min-width: 16rem"
+        sortField="menu_count"
+      >
+        <template #body="{ data }">
+          <div class="text-slate-800">
+            {{ data.menu_count }} {{ t('roleList.accessPermissionNumber') }}
+          </div>
+        </template>
+      </Column>
+
+      <Column :header="t('roleList.status')" style="min-width: 10rem" sortField="role_status">
+        <template #body="{ data }">
+          <Tag
+            :value="statusLabel(data.role_status)"
+            :severity="statusSeverity(data.role_status)"
+          />
+        </template>
+      </Column>
+
+      <Column :header="t('common.action')" style="width: 260px" sortDisabled>
+        <template #body="{ data }">
+          <div class="flex gap-2 justify-start">
+            <BaseIconButton
+              icon="pi pi-eye"
+              size="small"
+              severity="info"
+              outlined
+              rounded
+              @click="openView(data)"
+            />
+            <BaseIconButton
+              v-if="canManage"
+              icon="pi pi-pencil"
+              size="small"
+              severity="secondary"
+              outlined
+              rounded
+              @click="openEdit(data)"
+            />
+            <BaseIconButton
+              v-if="canManage"
+              icon="pi pi-trash"
+              size="small"
+              severity="danger"
+              outlined
+              rounded
+              @click="onDelete(data)"
+            />
+          </div>
         </template>
       </Column>
     </BaseDataTable>
+
+    <BaseConfirmDelete
+      :visible="confirmDeleteVisible"
+      :message="confirmDeleteMessage"
+      :loading="confirmDeleteLoading"
+      @update:visible="confirmDeleteVisible = $event"
+      @cancel="closeDeleteConfirm"
+      @confirm="onConfirmDelete"
+    />
+
+    <RoleForm
+      v-model:visible="formVisible"
+      :mode="formMode"
+      :model="formModel"
+      :menuOptions="translatedMenuOptions"
+      :menuOptionsLoading="store.menuOptionsLoading"
+      :loading="formSubmitting"
+      @permission-dropdown-show="ensurePermissionOptionsLoaded"
+      @submit="handleSubmit"
+      @close="formVisible = false"
+    />
   </div>
 </template>

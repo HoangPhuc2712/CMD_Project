@@ -1,8 +1,27 @@
-export type CmdUserRow = {
-  id: string
-  code: string
-  name: string
-  roleCode: string
-  area: string
-  status: 'Active' | 'Inactive'
+export type UserStatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE'
+
+export type RoleOption = {
+  label: string
+  value: number // role_id
+}
+
+export type UserRow = {
+  user_id: string
+  user_name: string
+  user_keyword: string
+  user_code: string
+
+  user_role_id: number
+  role_name: string
+  role_code: string
+
+  user_area_id: number
+  area_name: string
+  area_code: string
+
+  user_status: number
+  created_date: string
+  updated_date: string
+
+  _q: string
 }
