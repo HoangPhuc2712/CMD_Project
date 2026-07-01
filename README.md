@@ -40,3 +40,12 @@ npm run dev
 ```sh
 npm run build
 ```
+
+### Running on Android Studio
+
+npm run build
+npx cap copy
+npx cap sync
+
+implementation fileTree(dir: 'src/main/libs', include: ['*.jar', '*.aar'])
+implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])

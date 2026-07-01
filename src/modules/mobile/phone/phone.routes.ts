@@ -1,4 +1,4 @@
-import { useMobileAuthStore } from '@/modules/mobile/shared/stores/mobileAuth.store'
+import { useAuthStore } from '@/stores/auth.store'
 
 export const phoneRoutes = [
   {
@@ -11,12 +11,12 @@ export const phoneRoutes = [
     path: '/mobile/phone/home',
     name: 'mobile-phone-home',
     component: () => import('./pages/PhoneHome.vue'),
-    meta: { requiresAuth: false },
+    meta: { requiresAuth: true },
     beforeEnter: () => {
-      const mobileAuth = useMobileAuthStore()
-      mobileAuth.restoreSession()
+      const auth = useAuthStore()
+      if (!auth.token) auth.restoreSession()
 
-      if (!mobileAuth.isAuthenticated) {
+      if (!auth.isAuthenticated) {
         return { name: 'mobile-phone-login' }
       }
 

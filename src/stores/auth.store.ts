@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
+import type { PersistedAuthSession } from '@/types/auth'
 import type { PermissionKey } from '@/utils/permission'
 
-type AuthUser = {
+export type AuthUser = {
   user_id: string
   user_code: string
   user_name: string
@@ -16,10 +17,15 @@ type AuthUser = {
 }
 
 type SessionExpiredHandler = (message: string) => void | Promise<void>
+type MobileLoginCache = {
+  lastEmployeeCode: string
+  savedAt: string
+}
 
-const AUTH_SESSION_STORAGE_KEY = 'cmd_auth_session'
+export const AUTH_SESSION_STORAGE_KEY = 'cmd_auth_session'
+const MOBILE_LOGIN_CACHE_STORAGE_KEY = 'cmd_mobile_auth_cache'
 const ACCESS_TOKEN_LIFETIME_MS = 4 * 24 * 60 * 60 * 1000
-const SESSION_EXPIRED_MESSAGE = 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại'
+const SESSION_EXPIRED_MESSAGE = 'Phien dang nhap da het han, vui long dang nhap lai'
 
 let sessionExpiryTimer: ReturnType<typeof setTimeout> | null = null
 let sessionExpiredHandler: SessionExpiredHandler | null = null
@@ -35,12 +41,22 @@ function clearSessionExpiryTimer() {
   }
 }
 
+function normalizeUserCode(value: string) {
+  return value.trim().toUpperCase()
+}
+
 function createMockUser(userCode: string): AuthUser {
-  const isAdmin = userCode.trim().toUpperCase() === 'P23591'
+  const normalizedCode = normalizeUserCode(userCode)
+  const isAdmin = normalizedCode === 'P23591'
+  const userNameMap: Record<string, string> = {
+    P23591: 'Administrator',
+    CMD001: 'Nguyen Van A',
+  }
+
   return {
-    user_id: isAdmin ? 'CMD-ADMIN-001' : 'CMD-USER-001',
-    user_code: userCode.trim(),
-    user_name: isAdmin ? 'Administrator' : 'CMD User',
+    user_id: isAdmin ? 'CMD-ADMIN-001' : `CMD-USER-${normalizedCode}`,
+    user_code: normalizedCode,
+    user_name: userNameMap[normalizedCode] || 'CMD User',
     user_role_id: isAdmin ? 1 : 2,
     user_role_is_admin: isAdmin,
     role: {
@@ -62,6 +78,25 @@ function isExpired(expiresAt?: string | null) {
   return expiryTime > 0 && expiryTime <= Date.now()
 }
 
+function createMockToken(user: AuthUser) {
+  return `cmd-mock-token-${user.user_id}`
+}
+
+function extractEmployeeCodeFromBarcode(barcodeRaw: string) {
+  const normalizedBarcode = barcodeRaw.trim().toUpperCase()
+  if (!normalizedBarcode) return ''
+
+  const matchedCode = normalizedBarcode.match(/[A-Z]\d{4,}/)?.[0]
+  if (matchedCode) return matchedCode
+
+  const tokens = normalizedBarcode.split(/[^A-Z0-9]+/).filter(Boolean)
+  return tokens.at(-1) ?? normalizedBarcode
+}
+
+function getDefaultTokenExpiry() {
+  return new Date(Date.now() + ACCESS_TOKEN_LIFETIME_MS).toISOString()
+}
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: '' as string,
@@ -73,8 +108,8 @@ export const useAuthStore = defineStore('auth', {
     sessionSyncedOnce: false,
   }),
   getters: {
-    isAuthenticated: (s) => !!s.token && !!s.user,
-    isAdminUser: (s) => Boolean(s.user?.user_role_is_admin),
+    isAuthenticated: (state) => Boolean(state.token && state.user),
+    isAdminUser: (state) => Boolean(state.user?.user_role_is_admin),
   },
   actions: {
     canAccess(_required?: PermissionKey | PermissionKey[]) {
@@ -106,21 +141,30 @@ export const useAuthStore = defineStore('auth', {
     persistSession() {
       if (!this.token || !this.user) return
 
-      localStorage.setItem(
-        AUTH_SESSION_STORAGE_KEY,
-        JSON.stringify({
-          token: this.token,
+      const session: PersistedAuthSession<AuthUser> = {
+        savedAt: new Date().toISOString(),
+        tokens: {
+          accessToken: this.token,
+          refreshToken: this.refreshToken || undefined,
           tokenType: this.tokenType,
           expiresAt: this.tokenExpiresAt,
-          user: this.user,
-        }),
-      )
+        },
+        user: this.user,
+      }
+
+      localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(session))
     },
 
-    setSession(payload: { user: AuthUser; token: string; expiresAt: string }) {
+    setSession(payload: {
+      user: AuthUser
+      token: string
+      expiresAt: string
+      refreshToken?: string
+      tokenType?: string
+    }) {
       this.token = payload.token
-      this.refreshToken = ''
-      this.tokenType = 'Bearer'
+      this.refreshToken = payload.refreshToken || ''
+      this.tokenType = payload.tokenType || 'Bearer'
       this.tokenExpiresAt = payload.expiresAt
       this.user = payload.user
       this.sessionSyncedOnce = true
@@ -149,17 +193,52 @@ export const useAuthStore = defineStore('auth', {
       this.clearSession()
     },
 
+    saveMobileLoginCache(userCode: string) {
+      const cache: MobileLoginCache = {
+        lastEmployeeCode: normalizeUserCode(userCode),
+        savedAt: new Date().toISOString(),
+      }
+
+      localStorage.setItem(MOBILE_LOGIN_CACHE_STORAGE_KEY, JSON.stringify(cache))
+    },
+
+    readMobileLoginCache() {
+      const raw = localStorage.getItem(MOBILE_LOGIN_CACHE_STORAGE_KEY)
+      if (!raw) return null
+
+      try {
+        return JSON.parse(raw) as MobileLoginCache
+      } catch {
+        localStorage.removeItem(MOBILE_LOGIN_CACHE_STORAGE_KEY)
+        return null
+      }
+    },
+
     restoreSession() {
       const raw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY)
       if (!raw) return
 
       try {
-        const session = JSON.parse(raw) as {
-          token?: string
-          tokenType?: string
-          expiresAt?: string
-          user?: AuthUser
-        }
+        const parsed = JSON.parse(raw) as
+          | PersistedAuthSession<AuthUser>
+          | {
+              token?: string
+              refreshToken?: string
+              tokenType?: string
+              expiresAt?: string
+              user?: AuthUser
+            }
+
+        const session =
+          'tokens' in parsed
+            ? {
+                token: parsed.tokens?.accessToken,
+                refreshToken: parsed.tokens?.refreshToken,
+                tokenType: parsed.tokens?.tokenType,
+                expiresAt: parsed.tokens?.expiresAt,
+                user: parsed.user,
+              }
+            : parsed
 
         if (!session.token || !session.user) return
         if (isExpired(session.expiresAt)) {
@@ -169,8 +248,9 @@ export const useAuthStore = defineStore('auth', {
         }
 
         this.token = session.token
+        this.refreshToken = session.refreshToken || ''
         this.tokenType = session.tokenType || 'Bearer'
-        this.tokenExpiresAt = session.expiresAt || new Date(Date.now() + ACCESS_TOKEN_LIFETIME_MS).toISOString()
+        this.tokenExpiresAt = session.expiresAt || getDefaultTokenExpiry()
         this.user = session.user
         this.sessionSyncedOnce = true
         this.scheduleSessionExpiry()
@@ -181,8 +261,9 @@ export const useAuthStore = defineStore('auth', {
 
     async login(userCode: string, password: string) {
       this.loading = true
+
       try {
-        const normalizedCode = userCode.trim()
+        const normalizedCode = normalizeUserCode(userCode)
         if (!normalizedCode) throw new Error('USER_NOT_FOUND')
         if (!password.trim()) throw new Error('INVALID_PASSWORD')
 
@@ -194,9 +275,30 @@ export const useAuthStore = defineStore('auth', {
         const user = createMockUser(normalizedCode)
         this.setSession({
           user,
-          token: `cmd-mock-token-${user.user_id}`,
-          expiresAt: new Date(Date.now() + ACCESS_TOKEN_LIFETIME_MS).toISOString(),
+          token: createMockToken(user),
+          expiresAt: getDefaultTokenExpiry(),
         })
+
+        return { user }
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async loginWithEmployeeBarcode(barcodeRaw: string) {
+      this.loading = true
+
+      try {
+        const employeeCode = extractEmployeeCodeFromBarcode(barcodeRaw)
+        if (!employeeCode) throw new Error('EMPLOYEE_BARCODE_INVALID')
+
+        const user = createMockUser(employeeCode)
+        this.setSession({
+          user,
+          token: createMockToken(user),
+          expiresAt: getDefaultTokenExpiry(),
+        })
+        this.saveMobileLoginCache(user.user_code)
 
         return { user }
       } finally {

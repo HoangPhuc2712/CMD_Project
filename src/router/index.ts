@@ -1,6 +1,10 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { routes } from './routes'
 import { useAuthStore } from '@/stores/auth.store'
+import {
+  getHomeRouteNameByPath,
+  getLoginRouteNameByPath,
+} from '@/services/platform/platform.service'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -57,22 +61,24 @@ router.beforeEach(async (to) => {
   if (!auth.token) auth.restoreSession()
 
   if (to.meta.requiresAuth) {
-    if (!auth.isAuthenticated) return { name: 'login' }
+    if (!auth.isAuthenticated) return { name: getLoginRouteNameByPath(to.path) }
 
     if (auth.isTokenExpired()) {
       await auth.expireSession()
-      return { name: 'login' }
+      return { name: getLoginRouteNameByPath(to.path) }
     }
 
     if (!auth.sessionSyncedOnce) {
       const ok = await auth.syncSessionWithServer()
-      if (!ok || !auth.isAuthenticated) return { name: 'login' }
+      if (!ok || !auth.isAuthenticated) return { name: getLoginRouteNameByPath(to.path) }
     }
   }
 
   if (to.meta.adminOnly && !auth.isAdminUser) return { name: 'forbidden' }
 
-  if (to.name === 'login' && auth.isAuthenticated) return { name: 'dashboard' }
+  if ((to.name === 'login' || to.name === 'mobile-phone-login') && auth.isAuthenticated) {
+    return { name: getHomeRouteNameByPath(to.path) }
+  }
 
   return true
 })

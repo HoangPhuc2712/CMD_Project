@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">cmd-app</string>
+    <string name="title_activity_main">cmd-app</string>
+    <string name="package_name">cmd.jiahsin.com.vn</string>
+    <string name="custom_url_scheme">cmd.jiahsin.com.vn</string>
+</resources>

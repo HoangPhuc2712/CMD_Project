@@ -7,38 +7,28 @@
       <div class="bg-[linear-gradient(135deg,#0369a1_0%,#0ea5e9_100%)] px-5 py-[22px] text-white">
         <p class="m-0 text-xs font-bold uppercase tracking-[0.18em]">CMD Patrol</p>
         <h1 class="mb-[6px] mt-[10px] text-[28px] font-bold">Mobile Login</h1>
-        <p class="m-0 text-sm leading-6 text-white/90">Dang nhap bang tai khoan mock de vao phone app</p>
+        <p class="m-0 text-sm leading-6 text-white/90">Scan employee barcode to sign in on mobile</p>
       </div>
 
       <div class="grid gap-4 px-5 py-5">
         <div class="rounded-[20px] border border-sky-100 bg-[linear-gradient(180deg,#f0f9ff_0%,#eff6ff_100%)] px-4 py-[14px]">
-          <p class="mb-[6px] text-xs font-bold uppercase tracking-[0.08em] text-sky-700">Mock account</p>
-          <p class="m-0 text-base font-bold text-slate-900">P23591 / 123456</p>
+          <p class="mb-[6px] text-xs font-bold uppercase tracking-[0.08em] text-sky-700">Employee scan</p>
+          <p class="m-0 text-base font-bold text-slate-900">Mock barcode: EMP:P23591</p>
         </div>
 
-        <BaseInput
-          v-model="userCode"
-          class="w-full"
-          label="User Code"
-          :hasError="submitted && !userCode.trim()"
-          message="Vui long nhap user code"
-          size="large"
-        />
-
-        <BasePasswordInput
-          v-model="password"
-          class="w-full"
-          label="Password"
-          :hasError="submitted && !password.trim()"
-          message="Vui long nhap password"
-          size="large"
-          :feedback="false"
-          :toggleMask="true"
-        />
+        <div v-if="scannedCode" class="rounded-[20px] border border-cyan-100 bg-white px-4 py-4 shadow-sm">
+          <p class="mb-1 text-xs font-bold uppercase tracking-[0.08em] text-cyan-700">Scanned code</p>
+          <p class="m-0 break-all text-sm font-semibold text-slate-700">{{ scannedCode }}</p>
+        </div>
 
         <p v-if="errorMessage" class="mt-[-4px] text-[13px] font-semibold text-red-600">{{ errorMessage }}</p>
 
-        <BaseButton class="w-full" label="Login" :loading="mobileAuth.loading" @click="onLogin" />
+        <BaseButton
+          class="w-full"
+          label="Scan Employee Barcode"
+          :loading="auth.loading || scanning"
+          @click="onScanLogin"
+        />
       </div>
     </div>
   </section>
@@ -46,39 +36,81 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Capacitor } from '@capacitor/core'
 import { useRouter } from 'vue-router'
+import { BarcodeFormat, BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
 import BaseButton from '@/components/common/buttons/BaseButton.vue'
-import { BaseInput, BasePasswordInput } from '@/components/common/inputs'
-import { useMobileAuthStore } from '@/modules/mobile/shared/stores/mobileAuth.store'
+import { useAuthStore } from '@/stores/auth.store'
 
 const router = useRouter()
-const mobileAuth = useMobileAuthStore()
+const auth = useAuthStore()
 
-const userCode = ref('P23591')
-const password = ref('123456')
-const submitted = ref(false)
+const scannedCode = ref('')
+const scanning = ref(false)
 const errorMessage = ref('')
 
-mobileAuth.restoreSession()
+if (!auth.token) auth.restoreSession()
 
-if (mobileAuth.isAuthenticated) {
+if (auth.isAuthenticated) {
   void router.replace({ name: 'mobile-phone-home' })
 }
 
-async function onLogin() {
-  submitted.value = true
-  errorMessage.value = ''
-
-  if (!userCode.value.trim() || !password.value.trim()) {
-    return
+async function scanEmployeeBarcode() {
+  if (!Capacitor.isNativePlatform()) {
+    return 'EMP:P23591'
   }
 
+  const { supported } = await BarcodeScanner.isSupported()
+  if (!supported) {
+    throw new Error('SCANNER_NOT_SUPPORTED')
+  }
+
+  if (Capacitor.getPlatform() === 'android') {
+    const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable()
+    if (!available) {
+      await BarcodeScanner.installGoogleBarcodeScannerModule()
+      throw new Error('SCANNER_MODULE_INSTALLING')
+    }
+  }
+
+  const result = await BarcodeScanner.scan({
+    formats: [
+      BarcodeFormat.Code128,
+      BarcodeFormat.Code39,
+      BarcodeFormat.Code93,
+      BarcodeFormat.Ean13,
+      BarcodeFormat.Ean8,
+      BarcodeFormat.QrCode,
+    ],
+    autoZoom: true,
+  })
+
+  const rawValue = result.barcodes[0]?.rawValue || result.barcodes[0]?.displayValue || ''
+  if (!rawValue.trim()) throw new Error('EMPLOYEE_BARCODE_INVALID')
+
+  return rawValue.trim()
+}
+
+async function onScanLogin() {
+  errorMessage.value = ''
+  scanning.value = true
+
   try {
-    await mobileAuth.login(userCode.value, password.value)
+    scannedCode.value = await scanEmployeeBarcode()
+    await auth.loginWithEmployeeBarcode(scannedCode.value)
     await router.replace({ name: 'mobile-phone-home' })
-  } catch {
-    mobileAuth.clearSession()
-    errorMessage.value = 'Sai tai khoan hoac mat khau mock'
+  } catch (error: any) {
+    auth.clearSession()
+    errorMessage.value =
+      error?.message === 'CAMERA_PERMISSION_DENIED'
+        ? 'Camera permission is required to scan employee barcode'
+        : error?.message === 'SCANNER_MODULE_INSTALLING'
+          ? 'Google barcode scanner module is installing. Please tap scan again in a moment.'
+          : error?.message === 'SCANNER_NOT_SUPPORTED'
+            ? 'This device does not support barcode scanning'
+        : 'Employee barcode is invalid or scanner is unavailable'
+  } finally {
+    scanning.value = false
   }
 }
 </script>

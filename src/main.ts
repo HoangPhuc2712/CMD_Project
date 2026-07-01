@@ -7,6 +7,7 @@ import { router } from './router'
 import { setupPrimeVue } from './plugins/primevue'
 import { i18n, initializeAppLocale } from './plugins/i18n'
 import { registerUnauthorizedHandler } from '@/services/http/axios'
+import { getLoginRouteNameByPath } from '@/services/platform/platform.service'
 import { showSessionExpiredDialog } from '@/services/sessionExpiredDialog'
 import { registerSessionExpiredHandler, useAuthStore } from '@/stores/auth.store'
 import './styles/tailwind.css'
@@ -53,11 +54,13 @@ app.component('BasePasswordInput', BasePasswordInput)
 app.component('BaseMessage', BaseMessage)
 
 registerSessionExpiredHandler(async () => {
+  const loginRouteName = getLoginRouteNameByPath(router.currentRoute.value.path)
+
   showSessionExpiredDialog({
     seconds: 3,
     onConfirm: async () => {
-      if (router.currentRoute.value.name !== 'login') {
-        await router.replace({ name: 'login' })
+      if (router.currentRoute.value.name !== loginRouteName) {
+        await router.replace({ name: loginRouteName })
       }
     },
   })
@@ -65,6 +68,8 @@ registerSessionExpiredHandler(async () => {
 
 registerUnauthorizedHandler(async () => {
   const auth = useAuthStore(pinia)
+  const loginRouteName = getLoginRouteNameByPath(router.currentRoute.value.path)
+
   if (!auth.token) auth.restoreSession()
 
   if (auth.isAuthenticated || auth.token) {
@@ -72,8 +77,8 @@ registerUnauthorizedHandler(async () => {
     return
   }
 
-  if (router.currentRoute.value.name !== 'login') {
-    await router.replace({ name: 'login' })
+  if (router.currentRoute.value.name !== loginRouteName) {
+    await router.replace({ name: loginRouteName })
   }
 })
 

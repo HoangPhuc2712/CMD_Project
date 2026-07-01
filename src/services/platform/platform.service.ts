@@ -47,10 +47,17 @@ export function getDefaultPlatformRoute() {
     case 'phone':
       return '/mobile/phone'
     case 'tablet':
-      // Tablet UI is not implemented yet, so native devices fall back to phone for now.
       return '/mobile/phone'
     case 'web':
     default:
       return '/dashboard'
   }
+}
+
+export function getLoginRouteNameByPath(path = '') {
+  return path.startsWith('/mobile') ? 'mobile-phone-login' : 'login'
+}
+
+export function getHomeRouteNameByPath(path = '') {
+  return path.startsWith('/mobile') ? 'mobile-phone-home' : 'dashboard'
 }

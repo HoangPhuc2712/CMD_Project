@@ -1,8 +1,8 @@
 import Axios, { AxiosError } from 'axios'
 import { appConfig } from '@/config/app'
+import { AUTH_SESSION_STORAGE_KEY } from '@/stores/auth.store'
 
 const baseURL = appConfig.apiBaseUrl || ''
-const AUTH_SESSION_STORAGE_KEY = 'auth_session'
 
 type UnauthorizedHandler = (error: AxiosError) => void | Promise<void>
 
@@ -26,19 +26,23 @@ function readPersistedAuthToken() {
     const authSessionRaw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY)
     if (authSessionRaw) {
       const parsed = JSON.parse(authSessionRaw) as {
+        token?: string
+        tokenType?: string
+        expiresAt?: string
         tokens?: {
           accessToken?: string
           tokenType?: string
           expiresAt?: string
         }
       }
-      const accessToken = String(parsed?.tokens?.accessToken ?? '').trim()
-      const tokenType = String(parsed?.tokens?.tokenType ?? 'Bearer').trim() || 'Bearer'
-      const expiresAt = String(parsed?.tokens?.expiresAt ?? '').trim()
+
+      const accessToken = String(parsed?.tokens?.accessToken ?? parsed?.token ?? '').trim()
+      const tokenType = String(parsed?.tokens?.tokenType ?? parsed?.tokenType ?? 'Bearer').trim() || 'Bearer'
+      const expiresAt = String(parsed?.tokens?.expiresAt ?? parsed?.expiresAt ?? '').trim()
       if (accessToken) return { accessToken, tokenType, expiresAt }
     }
   } catch {
-    // ignore corrupted persisted auth session and fall back to legacy storage
+    // Ignore invalid cached auth session and fall back to legacy token storage.
   }
 
   const legacyToken = String(localStorage.getItem('token') ?? '').trim()
@@ -63,7 +67,6 @@ export const http = Axios.create({
   timeout: 20000,
 })
 
-// Access Token API request interceptor to automatically attach token and handle expiry
 http.interceptors.request.use(async (config) => {
   const authToken = readPersistedAuthToken()
 
@@ -84,14 +87,12 @@ http.interceptors.request.use(async (config) => {
 })
 
 http.interceptors.response.use(
-  (res) => res,
-  async (err: AxiosError) => {
-    const status = err.response?.status
-
-    if (status === 401 && unauthorizedHandler) {
-      await unauthorizedHandler(err)
+  (response) => response,
+  async (error: AxiosError) => {
+    if (error.response?.status === 401 && unauthorizedHandler) {
+      await unauthorizedHandler(error)
     }
 
-    return Promise.reject(err)
+    return Promise.reject(error)
   },
 )
