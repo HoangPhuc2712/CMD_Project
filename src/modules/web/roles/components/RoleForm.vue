@@ -2,10 +2,14 @@
 import { computed, reactive, ref, watch } from 'vue'
 import Dialog from 'primevue/dialog'
 import Checkbox from 'primevue/checkbox'
-import MultiSelect from 'primevue/multiselect'
 import BaseButton from '@/components/common/buttons/BaseButton.vue'
 import BaseInput from '@/components/common/inputs/BaseInput.vue'
 import { createRole, updateRole } from '@/modules/web/roles/roles.api'
+import type {
+  MenuCategoryOption,
+  MenuPermissionAction,
+  MenuPermissionMap,
+} from '@/modules/web/roles/roles.types'
 
 export type RoleFormMode = 'new' | 'view' | 'edit'
 
@@ -17,6 +21,7 @@ export type RoleFormModel = {
   role_hour_report: boolean
   menu_ids: number[]
   menu_names?: string[]
+  menu_permissions?: Record<number, MenuPermissionMap>
 }
 
 export type RoleFormSubmitPayload = { submit: (actor_id: string) => Promise<void> }
@@ -25,7 +30,7 @@ const props = defineProps<{
   visible: boolean
   mode: RoleFormMode
   model: RoleFormModel | null
-  menuOptions?: { label: string; value: number }[]
+  menuOptions?: MenuCategoryOption[]
   loading?: boolean
 }>()
 
@@ -42,6 +47,15 @@ const title = computed(() =>
   props.mode === 'new' ? 'Create Role' : props.mode === 'edit' ? 'Edit Role' : 'Role Detail',
 )
 
+const permissionActions: { key: MenuPermissionAction; label: string }[] = [
+  { key: 'view', label: 'VIEW' },
+  { key: 'create', label: 'CREATE' },
+  { key: 'update', label: 'UPDATE' },
+  { key: 'delete', label: 'DELETE' },
+  { key: 'import', label: 'IMPORT' },
+  { key: 'export', label: 'EXPORT' },
+]
+
 const form = reactive({
   role_id: undefined as number | undefined,
   role_code: '',
@@ -49,9 +63,55 @@ const form = reactive({
   role_is_admin: false,
   role_hour_report: false,
   menu_ids: [] as number[],
+  menu_permissions: {} as Record<number, MenuPermissionMap>,
 })
+
 const nameError = computed(() => submitted.value && !form.role_name.trim())
 const menuError = computed(() => submitted.value && !form.menu_ids.length)
+
+function createEmptyPermissionMap(): MenuPermissionMap {
+  return {
+    view: false,
+    create: false,
+    update: false,
+    delete: false,
+    import: false,
+    export: false,
+  }
+}
+
+function normalizePermissionMap(value?: Partial<MenuPermissionMap>): MenuPermissionMap {
+  return {
+    ...createEmptyPermissionMap(),
+    ...(value ?? {}),
+  }
+}
+
+function syncSelectedMenuPermissions(menuIds: number[], source?: Record<number, MenuPermissionMap>) {
+  const nextPermissions: Record<number, MenuPermissionMap> = {}
+  for (const menuId of menuIds) {
+    nextPermissions[menuId] = normalizePermissionMap(source?.[menuId] ?? { view: true })
+  }
+  form.menu_permissions = nextPermissions
+}
+
+function hasPermissionValue(menuId: number, key: MenuPermissionAction) {
+  return Boolean(form.menu_permissions[menuId]?.[key])
+}
+
+function setPermissionValue(menuId: number, key: MenuPermissionAction, checked: boolean) {
+  if (!form.menu_permissions[menuId]) {
+    form.menu_permissions[menuId] = createEmptyPermissionMap()
+  }
+  form.menu_permissions[menuId][key] = checked
+  if (key === 'view' && checked === false) {
+    form.menu_permissions[menuId].create = false
+    form.menu_permissions[menuId].update = false
+    form.menu_permissions[menuId].delete = false
+    form.menu_permissions[menuId].import = false
+    form.menu_permissions[menuId].export = false
+  }
+}
 
 watch(
   () => props.model,
@@ -63,6 +123,7 @@ watch(
     form.role_is_admin = Boolean(model?.role_is_admin)
     form.role_hour_report = Boolean(model?.role_hour_report)
     form.menu_ids = Array.isArray(model?.menu_ids) ? [...model!.menu_ids] : []
+    syncSelectedMenuPermissions(form.menu_ids, model?.menu_permissions)
   },
   { immediate: true },
 )
@@ -78,6 +139,11 @@ function submit() {
   submitted.value = true
   const name = form.role_name.trim()
   if (!name || !form.menu_ids.length) return
+
+  const menu_permissions = Object.fromEntries(
+    form.menu_ids.map((menuId) => [menuId, normalizePermissionMap(form.menu_permissions[menuId])]),
+  )
+
   emit('submit', {
     submit: async (actor_id: string) => {
       const payload = {
@@ -86,6 +152,7 @@ function submit() {
         role_is_admin: form.role_is_admin,
         role_hour_report: form.role_hour_report,
         menu_ids: form.menu_ids,
+        menu_permissions,
         actor_id,
       }
       if (props.mode === 'new') {
@@ -112,13 +179,12 @@ function submit() {
   >
     <div v-if="!model" class="text-slate-500">No role data.</div>
     <div v-else class="space-y-4">
-      <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-        Draft UI only. Permission rules will be adjusted after CMD authorization is confirmed.
-      </div>
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div>
-          <label class="mb-1 block text-sm text-slate-600">Role Name</label>
-          <div v-if="isView" class="font-semibold text-slate-800">{{ form.role_name }}</div>
+      <div class="grid grid-cols-1 gap-4">
+        <div class="space-y-2">
+          <label class="block text-sm font-semibold text-slate-700">Tên vai trò <span class="text-red-500">*</span></label>
+          <div v-if="isView" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 font-semibold text-slate-800">
+            {{ form.role_name }}
+          </div>
           <BaseInput
             v-else
             v-model="form.role_name"
@@ -129,39 +195,54 @@ function submit() {
             message="Role name is required."
           />
         </div>
-        <div class="flex items-end gap-2 mb-2">
+
+        <div class="flex items-center gap-2">
           <Checkbox
             v-model="form.role_is_admin"
             inputId="role_is_admin"
             binary
             :disabled="isView"
           />
-          <label for="role_is_admin" class="text-sm text-slate-700"
-            >Administrator Permissions</label
-          >
+          <label for="role_is_admin" class="text-sm font-semibold text-slate-700">Quyền Admin</label>
         </div>
-        <div class="md:col-span-2">
-          <label class="mb-1 block text-sm text-slate-600">Access Menu</label>
-          <div v-if="isView" class="font-semibold text-slate-800">
-            {{ model.menu_names?.join(', ') || '-' }}
+
+        <div class="space-y-2">
+          <div class="text-sm font-semibold text-slate-700">Phân quyền theo menu</div>
+          <div class="overflow-hidden rounded-2xl border border-slate-200">
+            <div
+              v-for="menu in menuOptions || []"
+              :key="menu.value"
+              class="border-b border-slate-200 last:border-b-0"
+            >
+              <div class="grid gap-3 px-4 py-4 md:grid-cols-[160px_1fr] md:items-start">
+                <div class="text-sm font-semibold text-slate-700">
+                  {{ menu.label }}
+                </div>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-6">
+                  <label
+                    v-for="action in permissionActions"
+                    :key="`${menu.value}-${action.key}`"
+                    class="flex items-center gap-2 text-sm text-slate-600"
+                  >
+                    <Checkbox
+                      :modelValue="hasPermissionValue(menu.value, action.key)"
+                      binary
+                      :disabled="isView"
+                      @update:modelValue="setPermissionValue(menu.value, action.key, $event)"
+                    />
+                    <span>{{ action.label }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div v-if="!menuOptions?.length" class="px-4 py-4 text-sm text-slate-500">
+              No menu permissions available.
+            </div>
           </div>
-          <MultiSelect
-            v-else
-            v-model="form.menu_ids"
-            :options="menuOptions"
-            optionLabel="label"
-            optionValue="value"
-            size="small"
-            display="chip"
-            placeholder="Select menus"
-            class="w-full"
-            :invalid="menuError"
-          />
-          <small v-if="menuError" class="mt-1 block text-red-500"
-            >At least one menu is required.</small
-          >
+          <small v-if="menuError" class="block text-red-500">At least one menu is required.</small>
         </div>
       </div>
+
       <div class="flex justify-end gap-2 border-t border-slate-200 pt-3">
         <BaseButton
           label="Cancel"
@@ -173,7 +254,7 @@ function submit() {
         />
         <BaseButton
           v-if="!isView"
-          label="Submit"
+          label="Lưu"
           size="small"
           severity="success"
           :loading="isSubmitting"

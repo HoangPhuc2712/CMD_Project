@@ -7,6 +7,10 @@ export type MenuCategoryOption = {
   priority: number
 }
 
+export type MenuPermissionAction = 'view' | 'create' | 'update' | 'delete' | 'import' | 'export'
+
+export type MenuPermissionMap = Record<MenuPermissionAction, boolean>
+
 export type RoleRow = {
   role_id: number
   role_code: string
@@ -20,6 +24,7 @@ export type RoleRow = {
   menu_ids: number[]
   menu_names: string[]
   menu_count: number
+  menu_permissions: Record<number, MenuPermissionMap>
 
   _q: string
 }

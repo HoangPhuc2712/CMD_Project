@@ -62,6 +62,7 @@ const zhTW = {
   },
   breadcrumb: {
     root: '內部巡邏報告',
+    reports: '報告',
     patrolsData: '巡邏資料',
     patrolReports: '巡邏報告',
     ctpatReport: 'C-TPAT 報告',

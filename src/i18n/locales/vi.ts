@@ -62,6 +62,7 @@ const vi = {
   },
   breadcrumb: {
     root: 'CMD Web Report',
+    reports: 'Báo cáo',
     patrolsData: 'Dữ liệu tuần tra',
     patrolReports: 'Báo cáo tuần tra',
     ctpatReport: 'Báo cáo C-TPAT',

@@ -49,7 +49,8 @@ const cards = computed(() => [
       <div
         v-for="card in cards"
         :key="card.label"
-        class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+        class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-1 ease-in-out duration-300"
+        :style="{ borderBottomColor: card.color }"
       >
         <div class="flex items-center gap-3">
           <div
@@ -61,7 +62,7 @@ const cards = computed(() => [
             <i :class="card.icon" />
           </div>
           <div class="flex flex-col gap-2">
-            <div class="text-md text-slate-500">{{ card.label }}</div>
+            <div class="text-md font-semibold text-slate-500">{{ card.label }}</div>
             <div class="text-3xl font-bold text-slate-900">{{ card.value }}</div>
             <div class="text-sm text-slate-500">View details</div>
           </div>

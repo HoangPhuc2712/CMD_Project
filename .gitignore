@@ -38,6 +38,27 @@ __screenshots__/
 # Vite
 *.timestamp-*-*.mjs
 
-docs
 
+
+
+# Local/private Codex guidance (kept out of Git intentionally)
+docs/
 AGENTS.md
+
+# Codex / AI context hygiene: generated folders and binaries
+node_modules/
+dist/
+dist-ssr/
+.git/
+android/.gradle/
+android/**/build/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/app/src/main/res/xml/config.xml
+android/capacitor-cordova-android-plugins/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class

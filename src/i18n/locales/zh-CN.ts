@@ -62,6 +62,7 @@ const zhCN = {
   },
   breadcrumb: {
     root: '内部巡逻报告',
+    reports: '报告',
     patrolsData: '巡逻数据',
     patrolReports: '巡逻报告',
     ctpatReport: 'C-TPAT 报告',
