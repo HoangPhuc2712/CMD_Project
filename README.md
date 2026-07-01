@@ -47,5 +47,15 @@ npm run build
 npx cap copy
 npx cap sync
 
+### Live Reload
+
+Terminal 1: npm run dev:android:usb
+This will run the app at http://127.0.0.1:5173
+
+Terminal 2:
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" devices -> Check whether device is connected or not
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" reverse tcp:5173 tcp:5173 -> Change port to 5173
+npm run android:live:usb -> Live Reload
+
 implementation fileTree(dir: 'src/main/libs', include: ['*.jar', '*.aar'])
 implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])

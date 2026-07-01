@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:android:usb": "vite --host 127.0.0.1",
+    "dev:android:lan": "vite --host 0.0.0.0",
+    "android:live:usb": "cap run android --live-reload --host localhost --port 5173 --forwardPorts 5173:5173",
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",

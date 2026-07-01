@@ -3,12 +3,12 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
+import { isMobilePlatform } from '@/services/platform/platform.service'
 import { setAppLocale, type AppLocale } from '@/plugins/i18n'
 
 const HEADER_POPOVER_OPEN_EVENT = 'header-popover-open'
 const HEADER_POPOVER_SOURCE = 'language-switcher'
 
-const rootRef = ref<HTMLElement | null>(null)
 const triggerRef = ref<HTMLElement | null>(null)
 const popoverRef = ref<HTMLElement | null>(null)
 const open = ref(false)
@@ -34,6 +34,15 @@ const currentLanguage = computed<LanguageOption>(() => {
 const currentLanguageLabel = computed(() => {
   return t(`languageSwitcher.languages.${currentLanguage.value.code}`)
 })
+
+const showLanguageLabel = computed(() => !isMobilePlatform())
+const popoverWidthClass = computed(() => (isMobilePlatform() ? 'w-full' : 'w-48'))
+const triggerButtonClass = computed(() =>
+  isMobilePlatform()
+    ? '!rounded-xl !border-slate-200 !bg-white !px-4 !py-3 !text-sm !text-slate-700 !shadow-sm transition hover:!bg-slate-50 hover:cursor-pointer'
+    : '!rounded-xl !border-slate-200 !bg-white !px-3 !py-2 !text-sm !text-slate-700 !shadow-sm transition hover:!bg-slate-50 hover:cursor-pointer',
+)
+const flagImageClass = computed(() => (isMobilePlatform() ? '!h-6 !w-6' : '!h-4 !w-4'))
 
 let hoverLeaveTimer: number | null = null
 
@@ -154,13 +163,13 @@ onBeforeUnmount(() => {
     <div ref="triggerRef" @mouseenter="onTriggerMouseEnter" @mouseleave="onTriggerMouseLeave">
       <BaseIconButton
         type="button"
-        :label="currentLanguageLabel"
+        :label="showLanguageLabel ? currentLanguageLabel : ''"
         :imageSrc="currentLanguage.flagSrc"
         imageAlt="Current language"
-        imageClass="h-4 w-4 shrink-0 rounded-[2px]"
+        :imageClass="flagImageClass"
         severity="secondary"
         outlined
-        class="!rounded-xl !border-slate-200 !bg-white !px-3 !py-2 !text-sm !text-slate-700 !shadow-sm transition hover:!bg-slate-50 hover:cursor-pointer"
+        :class="triggerButtonClass"
         @click="toggleOpen"
       />
     </div>
@@ -168,7 +177,10 @@ onBeforeUnmount(() => {
     <div
       v-if="open"
       ref="popoverRef"
-      class="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+      :class="[
+        'absolute right-0 z-50 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg',
+        popoverWidthClass,
+      ]"
       @mouseenter="onPopoverMouseEnter"
       @mouseleave="onPopoverMouseLeave"
     >
@@ -176,10 +188,10 @@ onBeforeUnmount(() => {
         v-for="item in languages"
         :key="item.code"
         type="button"
-        :label="getLanguageLabel(item)"
+        :label="showLanguageLabel ? getLanguageLabel(item) : ''"
         :imageSrc="item.flagSrc"
         :imageAlt="getLanguageLabel(item)"
-        imageClass="h-4 w-4 shrink-0 rounded-[2px]"
+        :imageClass="flagImageClass"
         contentClass="inline-flex w-full items-center gap-2"
         size="small"
         text
