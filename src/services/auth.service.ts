@@ -1,3 +1,4 @@
 export async function logoutUser(): Promise<void> {
-  // CMD project is using mock login until the backend authentication flow is confirmed.
+  localStorage.removeItem('cmd_auth_session')
+  localStorage.removeItem('cmd_mobile_auth_cache')
 }

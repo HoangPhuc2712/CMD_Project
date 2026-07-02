@@ -39,7 +39,7 @@ const showLanguageLabel = computed(() => !isMobilePlatform())
 const popoverWidthClass = computed(() => (isMobilePlatform() ? 'w-full' : 'w-48'))
 const triggerButtonClass = computed(() =>
   isMobilePlatform()
-    ? '!rounded-xl !border-slate-200 !bg-white !px-4 !py-3 !text-sm !text-slate-700 !shadow-sm transition hover:!bg-slate-50 hover:cursor-pointer'
+    ? '!rounded-xl !border-slate-200 !bg-white !px-2 !py-1 !text-sm !text-slate-700 !shadow-sm transition hover:!bg-slate-50 hover:cursor-pointer'
     : '!rounded-xl !border-slate-200 !bg-white !px-3 !py-2 !text-sm !text-slate-700 !shadow-sm transition hover:!bg-slate-50 hover:cursor-pointer',
 )
 const flagImageClass = computed(() => (isMobilePlatform() ? '!h-6 !w-6' : '!h-4 !w-4'))
@@ -195,7 +195,7 @@ onBeforeUnmount(() => {
         contentClass="inline-flex w-full items-center gap-2"
         size="small"
         text
-        class="w-full !justify-start !rounded-none !px-3 !py-2 !text-left !text-sm !font-normal !text-slate-700 transition hover:!bg-slate-50"
+        class="w-full !justify-start !rounded-none !px-2 !py-1 !text-left !text-sm !font-normal !text-slate-700 transition hover:!bg-slate-50"
         :class="item.code === locale ? '!bg-slate-50 !font-medium' : ''"
         @click="selectLanguage(item.code)"
       />
