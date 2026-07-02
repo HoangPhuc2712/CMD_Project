@@ -162,7 +162,6 @@ onBeforeUnmount(() => {
   <div ref="rootRef" class="relative shrink-0">
     <div ref="triggerRef" @mouseenter="onTriggerMouseEnter" @mouseleave="onTriggerMouseLeave">
       <BaseIconButton
-        type="button"
         :label="showLanguageLabel ? currentLanguageLabel : ''"
         :imageSrc="currentLanguage.flagSrc"
         imageAlt="Current language"
@@ -187,13 +186,11 @@ onBeforeUnmount(() => {
       <BaseIconButton
         v-for="item in languages"
         :key="item.code"
-        type="button"
         :label="showLanguageLabel ? getLanguageLabel(item) : ''"
         :imageSrc="item.flagSrc"
         :imageAlt="getLanguageLabel(item)"
         :imageClass="flagImageClass"
         contentClass="inline-flex w-full items-center gap-2"
-        size="small"
         text
         class="w-full !justify-start !rounded-none !px-2 !py-1 !text-left !text-sm !font-normal !text-slate-700 transition hover:!bg-slate-50"
         :class="item.code === locale ? '!bg-slate-50 !font-medium' : ''"

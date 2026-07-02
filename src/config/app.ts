@@ -1,4 +1,6 @@
+const localUrl = ''
+const devUrl = ''
+
 export const appConfig = {
   apiBaseUrl: '',
-  defaultAreaId: 1,
 } as const

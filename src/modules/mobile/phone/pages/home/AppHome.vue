@@ -20,9 +20,9 @@
             <div class="min-w-0 flex flex-col gap-3">
               <div class="flex flex-row gap-2 items-center truncate">
                 <p class="m-0 text-lg font-bold text-slate-800">CMD User</p>
-                <div class="flex items-center gap-2 rounded-full px-3 py-1">
+                <div class="flex items-center gap-1 rounded-full px-3 py-1">
                   <span
-                    class="h-2.5 w-2.5 rounded-full"
+                    class="h-2 w-2 rounded-full"
                     :class="online ? 'bg-emerald-500' : 'bg-red-500'"
                   />
                   <span class="text-sm font-semibold text-slate-700">
@@ -97,9 +97,6 @@ const online = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
 if (!auth.token) auth.restoreSession()
 
 const menuItems: MobileMenuItem[] = [
-  { key: 'roles', label: 'Roles', icon: 'pi pi-key' },
-  { key: 'users', label: 'Users', icon: 'pi pi-user' },
-  { key: 'areas', label: 'Areas', icon: 'pi pi-map-marker' },
   { key: 'routes', label: 'Routes', icon: 'pi pi-map', route: { name: 'mobile-phone-routes' } },
   { key: 'reports', label: 'Reports', icon: 'pi pi-file' },
 ]
