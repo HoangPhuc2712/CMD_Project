@@ -19,28 +19,30 @@
             :key="checkpoint.id"
             class="flex min-w-0 flex-col items-center"
           >
-            <div class="relative mx-auto w-[58px]">
-              <div
-                class="flex aspect-square items-center justify-center rounded-[18px] border-2 border-dashed border-slate-300 bg-slate-50 text-center"
-              >
-                <i class="pi pi-map !text-[24px] text-slate-400" />
+            <div class="flex w-full flex-col items-center">
+              <div class="relative mx-auto w-[58px]">
+                <div
+                  class="flex aspect-square items-center justify-center rounded-[18px] border-2 border-dashed border-slate-300 bg-slate-50 text-center"
+                >
+                  <i class="pi pi-map !text-[24px] text-slate-400" />
+                </div>
+                <div
+                  class="absolute bottom-[-0.375rem] right-[-0.25rem] flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-slate-300 bg-white px-1 text-[10px] font-semibold text-slate-400"
+                >
+                  {{ checkpoint.order }}
+                </div>
+                <span
+                  v-if="showConnector(index)"
+                  class="absolute left-full top-1/2 h-[2px] w-full -translate-y-1/2 bg-slate-300"
+                />
               </div>
-              <div
-                class="absolute bottom-[-0.375rem] right-[-0.25rem] flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-slate-300 bg-white px-1 text-[10px] font-semibold text-slate-400"
-              >
-                {{ checkpoint.order }}
-              </div>
-              <span
-                v-if="showConnector(index)"
-                class="absolute left-full top-1/2 h-[2px] w-full -translate-y-1/2 bg-slate-300"
-              />
-            </div>
 
-            <p
-              class="m-0 mt-3 w-full break-words text-center text-xs font-semibold leading-4 text-slate-500"
-            >
-              {{ checkpoint.code }}
-            </p>
+              <p
+                class="m-0 mt-3 w-full break-words text-center text-xs font-semibold leading-4 text-slate-500"
+              >
+                {{ checkpoint.code }}
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -69,6 +71,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { Capacitor } from '@capacitor/core'
+import { useRouter } from 'vue-router'
 import { BarcodeFormat, BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
 import BaseIconButton from '@/components/common/buttons/BaseIconButton.vue'
 import PageTopbar from '@/modules/mobile/shared/PageTopbar.vue'
@@ -78,6 +81,8 @@ type CheckpointCard = {
   order: string
   code: string
 }
+
+const router = useRouter()
 
 const routeInfo = {
   name: 'Route A Patrol',
@@ -108,9 +113,42 @@ function showConnector(index: number) {
   return !isLastItem && !isEndOfRow
 }
 
+function getCheckpointArea(checkpointId: string) {
+  const checkpointAreaMap: Record<string, string> = {
+    'cp-01': 'Main Gate',
+    'cp-02': 'Security Office',
+    'cp-03': 'Workshop A',
+    'cp-04': 'Workshop B',
+    'cp-05': 'Warehouse',
+    'cp-06': 'Packing Area',
+    'cp-07': 'Loading Bay',
+    'cp-08': 'Utility Yard',
+  }
+
+  return checkpointAreaMap[checkpointId] || 'Factory Area'
+}
+
+function navigateToCheckpointDetail(checkpoint: CheckpointCard) {
+  void router.push({
+    name: 'mobile-phone-route-checkpoint',
+    params: {
+      checkpointId: checkpoint.id,
+    },
+    query: {
+      name: checkpoint.code,
+      area: getCheckpointArea(checkpoint.id),
+      shift: routeInfo.startTime,
+    },
+  })
+}
+
+function getCurrentCheckpoint() {
+  return checkpoints[0]
+}
+
 async function scanCheckpointBarcode() {
   if (!Capacitor.isNativePlatform()) {
-    return 'CP-01'
+    return getCurrentCheckpoint()?.code || 'CP-01'
   }
 
   const { supported } = await BarcodeScanner.isSupported()
@@ -152,15 +190,24 @@ async function onScanCheckpoint() {
   try {
     const scannedCode = await scanCheckpointBarcode()
     scanMessage.value = `Scanned checkpoint: ${scannedCode}`
+
+    const currentCheckpoint = getCurrentCheckpoint()
+    if (!currentCheckpoint) {
+      throw new Error('CHECKPOINT_NOT_FOUND')
+    }
+
+    navigateToCheckpointDetail(currentCheckpoint)
   } catch (error: any) {
     errorMessage.value =
       error?.message === 'CAMERA_PERMISSION_DENIED'
         ? 'Camera permission is required to scan checkpoints'
-        : error?.message === 'SCANNER_MODULE_INSTALLING'
-          ? 'Google barcode scanner module is installing. Please tap scan again in a moment.'
-          : error?.message === 'SCANNER_NOT_SUPPORTED'
-            ? 'This device does not support barcode scanning'
-            : 'Checkpoint barcode is invalid or scanner is unavailable'
+        : error?.message === 'CHECKPOINT_NOT_FOUND'
+          ? 'Current checkpoint information is unavailable'
+          : error?.message === 'SCANNER_MODULE_INSTALLING'
+            ? 'Google barcode scanner module is installing. Please tap scan again in a moment.'
+            : error?.message === 'SCANNER_NOT_SUPPORTED'
+              ? 'This device does not support barcode scanning'
+              : 'Checkpoint barcode is invalid or scanner is unavailable'
   } finally {
     scanning.value = false
   }

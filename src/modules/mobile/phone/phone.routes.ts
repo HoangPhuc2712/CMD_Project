@@ -39,4 +39,20 @@ export const phoneRoutes = [
       return true
     },
   },
+  {
+    path: '/mobile/phone/routes/checkpoint/:checkpointId',
+    name: 'mobile-phone-route-checkpoint',
+    component: () => import('./pages/routes/AppRouteCheckpoint.vue'),
+    meta: { requiresAuth: true },
+    beforeEnter: () => {
+      const auth = useAuthStore()
+      if (!auth.token) auth.restoreSession()
+
+      if (!auth.isAuthenticated) {
+        return { name: 'mobile-phone-login' }
+      }
+
+      return true
+    },
+  },
 ]
