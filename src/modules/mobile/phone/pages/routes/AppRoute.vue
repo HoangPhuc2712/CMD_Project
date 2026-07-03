@@ -21,19 +21,23 @@
           >
             <div class="flex w-full flex-col items-center">
               <div class="relative mx-auto w-[58px]">
+                <span
+                  v-if="isNextCheckpoint(index)"
+                  class="checkpoint-next-ring absolute inset-[-6px] rounded-[22px]"
+                />
                 <div
-                  class="flex aspect-square items-center justify-center rounded-[18px] border-2 border-dashed border-slate-300 bg-slate-50 text-center"
+                  class="relative z-10 flex aspect-square items-center justify-center rounded-[18px] border-2 border-dashed border-slate-300 bg-slate-50 text-center"
                 >
                   <i class="pi pi-map !text-[24px] text-slate-400" />
                 </div>
                 <div
-                  class="absolute bottom-[-0.375rem] right-[-0.25rem] flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-slate-300 bg-white px-1 text-[10px] font-semibold text-slate-400"
+                  class="absolute bottom-[-0.375rem] right-[-0.25rem] z-20 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-slate-300 bg-white px-1 text-[10px] font-semibold text-slate-400"
                 >
                   {{ checkpoint.order }}
                 </div>
                 <span
                   v-if="showConnector(index)"
-                  class="absolute left-full top-1/2 h-[2px] w-full -translate-y-1/2 bg-slate-300"
+                  class="absolute left-full top-1/2 z-0 h-[2px] w-full -translate-y-1/2 bg-slate-300"
                 />
               </div>
 
@@ -111,6 +115,10 @@ function showConnector(index: number) {
   const isEndOfRow = (index + 1) % 4 === 0
 
   return !isLastItem && !isEndOfRow
+}
+
+function isNextCheckpoint(index: number) {
+  return index === 0
 }
 
 function getCheckpointArea(checkpointId: string) {
@@ -213,3 +221,22 @@ async function onScanCheckpoint() {
   }
 }
 </script>
+
+<style scoped>
+@keyframes checkpoint-next-pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.4;
+  }
+
+  100% {
+    transform: scale(1.05);
+    opacity: 0;
+  }
+}
+
+.checkpoint-next-ring {
+  border: 2px solid rgba(251, 146, 60, 0.65);
+  animation: checkpoint-next-pulse 1.2s ease-out infinite;
+}
+</style>
