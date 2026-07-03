@@ -170,7 +170,8 @@ onBeforeUnmount(() => {
         outlined
         :class="triggerButtonClass"
         @click="toggleOpen"
-      />
+      >
+      </BaseIconButton>
     </div>
 
     <div

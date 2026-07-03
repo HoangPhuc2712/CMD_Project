@@ -9,26 +9,21 @@
         <div class="flex items-start justify-between gap-4">
           <div class="flex min-w-0 items-center gap-4">
             <Avatar
-              icon="pi pi-user"
-              label=""
               shape="circle"
               size="large"
               class="bg-slate-100 text-slate-700 ring-1 ring-slate-200"
               aria-label="User avatar"
-            />
+            >
+              <BxSolidUser class="absolute h-6 w-6 text-slate-700" />
+              <span
+                class="h-3 w-3 rounded-full relative -bottom-6 -right-4 -translate-y-1/2 border-2 border-white"
+                :class="online ? 'bg-green-500' : 'bg-red-500'"
+              />
+            </Avatar>
 
-            <div class="min-w-0 flex flex-col gap-3">
+            <div class="min-w-0 flex flex-col gap-2">
               <div class="flex flex-row gap-2 items-center truncate">
                 <p class="m-0 text-lg font-bold text-slate-800">CMD User</p>
-                <div class="flex items-center gap-1 rounded-full px-3 py-1">
-                  <span
-                    class="h-2 w-2 rounded-full"
-                    :class="online ? 'bg-emerald-500' : 'bg-red-500'"
-                  />
-                  <span class="text-sm font-semibold text-slate-700">
-                    {{ online ? 'Online' : 'Offline' }}
-                  </span>
-                </div>
               </div>
               <div class="flex flex-row items-center gap-1 m-0 truncate text-sm text-slate-700">
                 <p class="m-0 truncate text-sm text-slate-500">R39558</p>
@@ -81,6 +76,7 @@ import { useRouter, type RouteLocationRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
 import HomeTopbar from '@/modules/mobile/shared/HomeTopbar.vue'
 import Tag from 'primevue/tag'
+import { BxSolidUser } from '@/utils/mobileIcons'
 
 const auth = useAuthStore()
 

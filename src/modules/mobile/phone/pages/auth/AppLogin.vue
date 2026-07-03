@@ -48,7 +48,7 @@
             icon="pi pi-camera !text-[20px]"
             label="Scan to Login"
             size="large"
-            class="h-[60px] w-full !text-[20px]"
+            class="h-[60px] w-full !text-[20px] !rounded-[18px]"
             :loading="auth.loading || scanning"
             @click="onScanLogin"
           />

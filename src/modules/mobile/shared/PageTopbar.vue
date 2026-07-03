@@ -1,5 +1,5 @@
 <template>
-  <header class="flex items-center justify-between gap-3 px-2 py-3 text-slate-700">
+  <header class="flex items-center justify-between gap-3 py-3 text-slate-700">
     <div class="flex min-w-0 items-center gap-2">
       <button
         type="button"
@@ -27,7 +27,7 @@
         :aria-label="online ? 'Online' : 'Offline'"
         :title="online ? 'Online' : 'Offline'"
       >
-        <BxWifi :class="online ? 'text-emerald-300' : 'text-red-300'" class="h-6 w-6" />
+        <BxWifi :class="online ? 'text-green-500' : 'text-red-500'" class="h-6 w-6" />
       </button>
     </div>
   </header>

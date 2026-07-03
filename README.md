@@ -49,7 +49,8 @@ npx cap sync
 
 ### Live Reload
 
-Terminal 1: npm run dev:android:usb
+Terminal 1:
+npm run dev:android:usb
 This will run the app at http://127.0.0.1:5173
 
 Terminal 2:

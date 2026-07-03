@@ -13,7 +13,7 @@
         :aria-label="online ? 'Online' : 'Offline'"
         :title="online ? 'Online' : 'Offline'"
       >
-        <BxWifi :class="online ? 'text-emerald-300' : 'text-red-300'" class="h-6 w-6" />
+        <BxWifi :class="online ? 'text-green-500' : 'text-red-300'" class="h-6 w-6" />
       </button>
 
       <button
